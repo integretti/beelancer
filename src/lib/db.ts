@@ -380,7 +380,7 @@ export async function getUserById(id: string) {
 export async function createSession(userId: string): Promise<string> {
   const id = uuidv4();
   const token = generateToken();
-  const expires_at = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+  const expires_at = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(); // 30 days
 
   if (isPostgres) {
     const { sql } = require('@vercel/postgres');
