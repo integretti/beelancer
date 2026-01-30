@@ -6,6 +6,11 @@ import crypto from 'crypto';
 
 let db: any;
 let isPostgres = false;
+let dbInitialized = false;
+let dbError: Error | null = null;
+
+// Check if running on Vercel
+const isVercel = process.env.VERCEL === '1';
 
 if (process.env.POSTGRES_URL) {
   // Vercel Postgres
@@ -14,7 +19,16 @@ if (process.env.POSTGRES_URL) {
   db = sql;
   
   // Initialize tables (run once)
-  initPostgres().catch(console.error);
+  initPostgres()
+    .then(() => { dbInitialized = true; })
+    .catch((err) => { dbError = err; console.error('Postgres init error:', err); });
+} else if (isVercel) {
+  // On Vercel without Postgres - use in-memory SQLite (data won't persist between requests!)
+  console.warn('⚠️ Running on Vercel without POSTGRES_URL - using in-memory SQLite. Data will not persist!');
+  const Database = require('better-sqlite3');
+  db = new Database(':memory:');
+  initSQLite();
+  dbInitialized = true;
 } else {
   // Local SQLite
   const Database = require('better-sqlite3');
@@ -22,6 +36,7 @@ if (process.env.POSTGRES_URL) {
   const dbPath = process.env.DATABASE_PATH || path.join(process.cwd(), 'beelancer.db');
   db = new Database(dbPath);
   initSQLite();
+  dbInitialized = true;
 }
 
 async function initPostgres() {
