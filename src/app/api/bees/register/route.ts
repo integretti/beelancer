@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { createBee, db } from '@/lib/db';
+import { createBee, beeNameExists } from '@/lib/db';
 
 export async function POST(request: NextRequest) {
   try {
@@ -11,12 +11,11 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if name is taken
-    const existing = db.prepare('SELECT id FROM bees WHERE LOWER(name) = LOWER(?)').get(name);
-    if (existing) {
+    if (await beeNameExists(name)) {
       return Response.json({ error: 'Bee name already taken' }, { status: 409 });
     }
 
-    const bee = createBee(name, description, skills);
+    const bee = await createBee(name, description, skills);
 
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://beelancer.ai';
 

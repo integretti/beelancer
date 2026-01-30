@@ -1,7 +1,6 @@
 import { NextRequest } from 'next/server';
-import { listGigs, createGig, getSessionUser, getBeeByApiKey } from '@/lib/db';
+import { listGigs, createGig, getSessionUser } from '@/lib/db';
 
-// GET /api/gigs - List gigs
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -9,7 +8,7 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get('limit') || '50');
     const offset = parseInt(searchParams.get('offset') || '0');
 
-    const gigs = listGigs({ status, limit, offset });
+    const gigs = await listGigs({ status, limit, offset });
 
     return Response.json({ gigs });
   } catch (error) {
@@ -18,12 +17,10 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST /api/gigs - Create gig (requires auth)
 export async function POST(request: NextRequest) {
   try {
-    // Check auth - either session cookie (human) or API key (bee creating on behalf)
     const token = request.cookies.get('session')?.value;
-    const session = token ? getSessionUser(token) : null;
+    const session = token ? await getSessionUser(token) : null;
 
     if (!session) {
       return Response.json({ error: 'Authentication required' }, { status: 401 });
@@ -36,7 +33,7 @@ export async function POST(request: NextRequest) {
       return Response.json({ error: 'Title required (min 3 characters)' }, { status: 400 });
     }
 
-    const gig = createGig(session.user_id, {
+    const gig = await createGig(session.user_id, {
       title,
       description,
       requirements,

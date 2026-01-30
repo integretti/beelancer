@@ -1,166 +1,275 @@
-import Database from 'better-sqlite3';
-import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import crypto from 'crypto';
 
-// Use /tmp on Vercel (ephemeral), local file for development
-const dbPath = process.env.DATABASE_PATH || (
-  process.env.VERCEL ? '/tmp/beelancer.db' : path.join(process.cwd(), 'beelancer.db')
-);
-const db = new Database(dbPath);
+// ============ Database Setup ============
+// Uses Vercel Postgres when available, falls back to SQLite for local dev
 
-// Initialize schema
-db.exec(`
-  -- Humans (gig posters, clients)
-  CREATE TABLE IF NOT EXISTS users (
-    id TEXT PRIMARY KEY,
-    email TEXT UNIQUE NOT NULL,
-    password_hash TEXT NOT NULL,
-    name TEXT,
-    avatar_url TEXT,
-    email_verified INTEGER DEFAULT 0,
-    verification_token TEXT,
-    verification_expires TEXT,
-    reset_token TEXT,
-    reset_expires TEXT,
-    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
-  );
+let db: any;
+let isPostgres = false;
 
-  -- Sessions for humans
-  CREATE TABLE IF NOT EXISTS sessions (
-    id TEXT PRIMARY KEY,
-    user_id TEXT REFERENCES users(id) ON DELETE CASCADE,
-    token TEXT UNIQUE NOT NULL,
-    expires_at TEXT NOT NULL,
-    created_at TEXT DEFAULT CURRENT_TIMESTAMP
-  );
+if (process.env.POSTGRES_URL) {
+  // Vercel Postgres
+  isPostgres = true;
+  const { sql } = require('@vercel/postgres');
+  db = sql;
+  
+  // Initialize tables (run once)
+  initPostgres().catch(console.error);
+} else {
+  // Local SQLite
+  const Database = require('better-sqlite3');
+  const path = require('path');
+  const dbPath = process.env.DATABASE_PATH || path.join(process.cwd(), 'beelancer.db');
+  db = new Database(dbPath);
+  initSQLite();
+}
 
-  -- Bees (AI agents/bots)
-  CREATE TABLE IF NOT EXISTS bees (
-    id TEXT PRIMARY KEY,
-    api_key TEXT UNIQUE NOT NULL,
-    name TEXT NOT NULL,
-    description TEXT,
-    skills TEXT, -- JSON array
-    status TEXT DEFAULT 'active', -- active, suspended
-    owner_id TEXT REFERENCES users(id), -- optional human owner
-    honey INTEGER DEFAULT 0, -- earned points
-    reputation REAL DEFAULT 0.0, -- 0-5 rating
-    gigs_completed INTEGER DEFAULT 0,
-    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-    last_seen_at TEXT
-  );
+async function initPostgres() {
+  const { sql } = require('@vercel/postgres');
+  
+  await sql`
+    CREATE TABLE IF NOT EXISTS users (
+      id TEXT PRIMARY KEY,
+      email TEXT UNIQUE NOT NULL,
+      password_hash TEXT NOT NULL,
+      name TEXT,
+      avatar_url TEXT,
+      email_verified INTEGER DEFAULT 0,
+      verification_token TEXT,
+      verification_expires TIMESTAMP,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `;
 
-  -- Gigs (work posted by humans)
-  CREATE TABLE IF NOT EXISTS gigs (
-    id TEXT PRIMARY KEY,
-    user_id TEXT REFERENCES users(id) ON DELETE CASCADE,
-    title TEXT NOT NULL,
-    description TEXT,
-    requirements TEXT, -- detailed specs/requirements
-    price_cents INTEGER DEFAULT 0, -- price in cents (0 = free)
-    status TEXT DEFAULT 'draft', -- draft, open, in_progress, review, completed, cancelled
-    category TEXT,
-    deadline TEXT,
-    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
-  );
+  await sql`
+    CREATE TABLE IF NOT EXISTS sessions (
+      id TEXT PRIMARY KEY,
+      user_id TEXT REFERENCES users(id) ON DELETE CASCADE,
+      token TEXT UNIQUE NOT NULL,
+      expires_at TIMESTAMP NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `;
 
-  -- Bids (bee proposals for gigs)
-  CREATE TABLE IF NOT EXISTS bids (
-    id TEXT PRIMARY KEY,
-    gig_id TEXT REFERENCES gigs(id) ON DELETE CASCADE,
-    bee_id TEXT REFERENCES bees(id) ON DELETE CASCADE,
-    proposal TEXT NOT NULL,
-    estimated_hours REAL,
-    honey_requested INTEGER, -- how much honey they want (for splits)
-    status TEXT DEFAULT 'pending', -- pending, accepted, rejected, withdrawn
-    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(gig_id, bee_id)
-  );
+  await sql`
+    CREATE TABLE IF NOT EXISTS bees (
+      id TEXT PRIMARY KEY,
+      api_key TEXT UNIQUE NOT NULL,
+      name TEXT NOT NULL,
+      description TEXT,
+      skills TEXT,
+      status TEXT DEFAULT 'active',
+      owner_id TEXT REFERENCES users(id),
+      honey INTEGER DEFAULT 0,
+      reputation REAL DEFAULT 0.0,
+      gigs_completed INTEGER DEFAULT 0,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      last_seen_at TIMESTAMP
+    )
+  `;
 
-  -- Bee teams (for collaborative gigs)
-  CREATE TABLE IF NOT EXISTS bee_teams (
-    id TEXT PRIMARY KEY,
-    gig_id TEXT REFERENCES gigs(id) ON DELETE CASCADE,
-    name TEXT,
-    created_at TEXT DEFAULT CURRENT_TIMESTAMP
-  );
+  await sql`
+    CREATE TABLE IF NOT EXISTS gigs (
+      id TEXT PRIMARY KEY,
+      user_id TEXT REFERENCES users(id) ON DELETE CASCADE,
+      title TEXT NOT NULL,
+      description TEXT,
+      requirements TEXT,
+      price_cents INTEGER DEFAULT 0,
+      status TEXT DEFAULT 'draft',
+      category TEXT,
+      deadline TIMESTAMP,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `;
 
-  -- Team members with honey split
-  CREATE TABLE IF NOT EXISTS team_members (
-    team_id TEXT REFERENCES bee_teams(id) ON DELETE CASCADE,
-    bee_id TEXT REFERENCES bees(id) ON DELETE CASCADE,
-    honey_split INTEGER DEFAULT 100, -- percentage (out of 100)
-    role TEXT,
-    joined_at TEXT DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (team_id, bee_id)
-  );
+  await sql`
+    CREATE TABLE IF NOT EXISTS bids (
+      id TEXT PRIMARY KEY,
+      gig_id TEXT REFERENCES gigs(id) ON DELETE CASCADE,
+      bee_id TEXT REFERENCES bees(id) ON DELETE CASCADE,
+      proposal TEXT NOT NULL,
+      estimated_hours REAL,
+      honey_requested INTEGER,
+      status TEXT DEFAULT 'pending',
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(gig_id, bee_id)
+    )
+  `;
 
-  -- Gig assignments (which bees are working on which gigs)
-  CREATE TABLE IF NOT EXISTS gig_assignments (
-    id TEXT PRIMARY KEY,
-    gig_id TEXT REFERENCES gigs(id) ON DELETE CASCADE,
-    bee_id TEXT REFERENCES bees(id) ON DELETE CASCADE,
-    team_id TEXT REFERENCES bee_teams(id),
-    honey_split INTEGER DEFAULT 100, -- percentage of total
-    status TEXT DEFAULT 'working', -- working, submitted, approved, rejected
-    assigned_at TEXT DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(gig_id, bee_id)
-  );
+  await sql`
+    CREATE TABLE IF NOT EXISTS gig_assignments (
+      id TEXT PRIMARY KEY,
+      gig_id TEXT REFERENCES gigs(id) ON DELETE CASCADE,
+      bee_id TEXT REFERENCES bees(id) ON DELETE CASCADE,
+      honey_split INTEGER DEFAULT 100,
+      status TEXT DEFAULT 'working',
+      assigned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(gig_id, bee_id)
+    )
+  `;
 
-  -- Deliverables (work submissions)
-  CREATE TABLE IF NOT EXISTS deliverables (
-    id TEXT PRIMARY KEY,
-    gig_id TEXT REFERENCES gigs(id) ON DELETE CASCADE,
-    bee_id TEXT REFERENCES bees(id) ON DELETE CASCADE,
-    title TEXT NOT NULL,
-    type TEXT, -- code, document, design, link, file
-    content TEXT,
-    url TEXT,
-    status TEXT DEFAULT 'submitted', -- submitted, approved, rejected, revision_requested
-    feedback TEXT,
-    created_at TEXT DEFAULT CURRENT_TIMESTAMP
-  );
+  await sql`
+    CREATE TABLE IF NOT EXISTS deliverables (
+      id TEXT PRIMARY KEY,
+      gig_id TEXT REFERENCES gigs(id) ON DELETE CASCADE,
+      bee_id TEXT REFERENCES bees(id) ON DELETE CASCADE,
+      title TEXT NOT NULL,
+      type TEXT,
+      content TEXT,
+      url TEXT,
+      status TEXT DEFAULT 'submitted',
+      feedback TEXT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `;
 
-  -- Reviews (human ratings of completed work)
-  CREATE TABLE IF NOT EXISTS reviews (
-    id TEXT PRIMARY KEY,
-    gig_id TEXT REFERENCES gigs(id) ON DELETE CASCADE,
-    bee_id TEXT REFERENCES bees(id) ON DELETE CASCADE,
-    user_id TEXT REFERENCES users(id) ON DELETE CASCADE,
-    rating INTEGER NOT NULL CHECK(rating >= 1 AND rating <= 5),
-    comment TEXT,
-    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(gig_id, bee_id)
-  );
+  await sql`
+    CREATE TABLE IF NOT EXISTS reviews (
+      id TEXT PRIMARY KEY,
+      gig_id TEXT REFERENCES gigs(id) ON DELETE CASCADE,
+      bee_id TEXT REFERENCES bees(id) ON DELETE CASCADE,
+      user_id TEXT REFERENCES users(id) ON DELETE CASCADE,
+      rating INTEGER NOT NULL CHECK(rating >= 1 AND rating <= 5),
+      comment TEXT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(gig_id, bee_id)
+    )
+  `;
 
-  -- Honey ledger (point transactions)
-  CREATE TABLE IF NOT EXISTS honey_ledger (
-    id TEXT PRIMARY KEY,
-    bee_id TEXT REFERENCES bees(id) ON DELETE CASCADE,
-    gig_id TEXT REFERENCES gigs(id),
-    amount INTEGER NOT NULL,
-    type TEXT NOT NULL, -- gig_completed, bonus, penalty, payout
-    note TEXT,
-    created_at TEXT DEFAULT CURRENT_TIMESTAMP
-  );
+  await sql`
+    CREATE TABLE IF NOT EXISTS honey_ledger (
+      id TEXT PRIMARY KEY,
+      bee_id TEXT REFERENCES bees(id) ON DELETE CASCADE,
+      gig_id TEXT REFERENCES gigs(id),
+      amount INTEGER NOT NULL,
+      type TEXT NOT NULL,
+      note TEXT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `;
+}
 
-  -- Indexes
-  CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
-  CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(token);
-  CREATE INDEX IF NOT EXISTS idx_bees_api_key ON bees(api_key);
-  CREATE INDEX IF NOT EXISTS idx_gigs_status ON gigs(status);
-  CREATE INDEX IF NOT EXISTS idx_gigs_user ON gigs(user_id);
-  CREATE INDEX IF NOT EXISTS idx_bids_gig ON bids(gig_id);
-  CREATE INDEX IF NOT EXISTS idx_assignments_gig ON gig_assignments(gig_id);
-  CREATE INDEX IF NOT EXISTS idx_deliverables_gig ON deliverables(gig_id);
-`);
+function initSQLite() {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS users (
+      id TEXT PRIMARY KEY,
+      email TEXT UNIQUE NOT NULL,
+      password_hash TEXT NOT NULL,
+      name TEXT,
+      avatar_url TEXT,
+      email_verified INTEGER DEFAULT 0,
+      verification_token TEXT,
+      verification_expires TEXT,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS sessions (
+      id TEXT PRIMARY KEY,
+      user_id TEXT REFERENCES users(id) ON DELETE CASCADE,
+      token TEXT UNIQUE NOT NULL,
+      expires_at TEXT NOT NULL,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS bees (
+      id TEXT PRIMARY KEY,
+      api_key TEXT UNIQUE NOT NULL,
+      name TEXT NOT NULL,
+      description TEXT,
+      skills TEXT,
+      status TEXT DEFAULT 'active',
+      owner_id TEXT REFERENCES users(id),
+      honey INTEGER DEFAULT 0,
+      reputation REAL DEFAULT 0.0,
+      gigs_completed INTEGER DEFAULT 0,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      last_seen_at TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS gigs (
+      id TEXT PRIMARY KEY,
+      user_id TEXT REFERENCES users(id) ON DELETE CASCADE,
+      title TEXT NOT NULL,
+      description TEXT,
+      requirements TEXT,
+      price_cents INTEGER DEFAULT 0,
+      status TEXT DEFAULT 'draft',
+      category TEXT,
+      deadline TEXT,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS bids (
+      id TEXT PRIMARY KEY,
+      gig_id TEXT REFERENCES gigs(id) ON DELETE CASCADE,
+      bee_id TEXT REFERENCES bees(id) ON DELETE CASCADE,
+      proposal TEXT NOT NULL,
+      estimated_hours REAL,
+      honey_requested INTEGER,
+      status TEXT DEFAULT 'pending',
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(gig_id, bee_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS gig_assignments (
+      id TEXT PRIMARY KEY,
+      gig_id TEXT REFERENCES gigs(id) ON DELETE CASCADE,
+      bee_id TEXT REFERENCES bees(id) ON DELETE CASCADE,
+      honey_split INTEGER DEFAULT 100,
+      status TEXT DEFAULT 'working',
+      assigned_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(gig_id, bee_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS deliverables (
+      id TEXT PRIMARY KEY,
+      gig_id TEXT REFERENCES gigs(id) ON DELETE CASCADE,
+      bee_id TEXT REFERENCES bees(id) ON DELETE CASCADE,
+      title TEXT NOT NULL,
+      type TEXT,
+      content TEXT,
+      url TEXT,
+      status TEXT DEFAULT 'submitted',
+      feedback TEXT,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS reviews (
+      id TEXT PRIMARY KEY,
+      gig_id TEXT REFERENCES gigs(id) ON DELETE CASCADE,
+      bee_id TEXT REFERENCES bees(id) ON DELETE CASCADE,
+      user_id TEXT REFERENCES users(id) ON DELETE CASCADE,
+      rating INTEGER NOT NULL CHECK(rating >= 1 AND rating <= 5),
+      comment TEXT,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(gig_id, bee_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS honey_ledger (
+      id TEXT PRIMARY KEY,
+      bee_id TEXT REFERENCES bees(id) ON DELETE CASCADE,
+      gig_id TEXT REFERENCES gigs(id),
+      amount INTEGER NOT NULL,
+      type TEXT NOT NULL,
+      note TEXT,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+    CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(token);
+    CREATE INDEX IF NOT EXISTS idx_bees_api_key ON bees(api_key);
+    CREATE INDEX IF NOT EXISTS idx_gigs_status ON gigs(status);
+    CREATE INDEX IF NOT EXISTS idx_gigs_user ON gigs(user_id);
+  `);
+}
 
 // ============ Helper Functions ============
 
-// Password hashing
 export function hashPassword(password: string): string {
   const salt = crypto.randomBytes(16).toString('hex');
   const hash = crypto.pbkdf2Sync(password, salt, 1000, 64, 'sha512').toString('hex');
@@ -173,7 +282,6 @@ export function verifyPassword(password: string, stored: string): boolean {
   return hash === verify;
 }
 
-// Token generation
 export function generateToken(): string {
   return crypto.randomBytes(32).toString('hex');
 }
@@ -186,293 +294,491 @@ export function generateVerificationCode(): string {
   return Math.random().toString(36).substring(2, 8).toUpperCase();
 }
 
-// ============ User Functions ============
+// ============ Database Operations ============
+// These work for both Postgres and SQLite
 
-export function createUser(email: string, password: string, name?: string) {
+export async function createUser(email: string, password: string, name?: string) {
   const id = uuidv4();
   const password_hash = hashPassword(password);
   const verification_token = generateVerificationCode();
   const verification_expires = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
-  
-  db.prepare(`
-    INSERT INTO users (id, email, password_hash, name, verification_token, verification_expires)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `).run(id, email.toLowerCase(), password_hash, name || null, verification_token, verification_expires);
-  
+
+  if (isPostgres) {
+    const { sql } = require('@vercel/postgres');
+    await sql`
+      INSERT INTO users (id, email, password_hash, name, verification_token, verification_expires)
+      VALUES (${id}, ${email.toLowerCase()}, ${password_hash}, ${name || null}, ${verification_token}, ${verification_expires})
+    `;
+  } else {
+    db.prepare(`
+      INSERT INTO users (id, email, password_hash, name, verification_token, verification_expires)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(id, email.toLowerCase(), password_hash, name || null, verification_token, verification_expires);
+  }
+
   return { id, email, verification_token };
 }
 
-export function verifyUserEmail(token: string): boolean {
-  const user = db.prepare(`
-    SELECT id FROM users 
-    WHERE verification_token = ? AND verification_expires > datetime('now') AND email_verified = 0
-  `).get(token) as any;
-  
-  if (user) {
-    db.prepare(`
-      UPDATE users SET email_verified = 1, verification_token = NULL WHERE id = ?
-    `).run(user.id);
-    return true;
+export async function verifyUserEmail(token: string): Promise<boolean> {
+  if (isPostgres) {
+    const { sql } = require('@vercel/postgres');
+    const result = await sql`
+      UPDATE users SET email_verified = 1, verification_token = NULL 
+      WHERE verification_token = ${token} AND verification_expires > NOW() AND email_verified = 0
+      RETURNING id
+    `;
+    return result.rows.length > 0;
+  } else {
+    const user = db.prepare(`
+      SELECT id FROM users 
+      WHERE verification_token = ? AND verification_expires > datetime('now') AND email_verified = 0
+    `).get(token) as any;
+
+    if (user) {
+      db.prepare(`UPDATE users SET email_verified = 1, verification_token = NULL WHERE id = ?`).run(user.id);
+      return true;
+    }
+    return false;
   }
-  return false;
 }
 
-export function getUserByEmail(email: string) {
-  return db.prepare('SELECT * FROM users WHERE email = ?').get(email.toLowerCase());
+export async function getUserByEmail(email: string) {
+  if (isPostgres) {
+    const { sql } = require('@vercel/postgres');
+    const result = await sql`SELECT * FROM users WHERE email = ${email.toLowerCase()}`;
+    return result.rows[0];
+  } else {
+    return db.prepare('SELECT * FROM users WHERE email = ?').get(email.toLowerCase());
+  }
 }
 
-export function getUserById(id: string) {
-  return db.prepare('SELECT * FROM users WHERE id = ?').get(id);
+export async function getUserById(id: string) {
+  if (isPostgres) {
+    const { sql } = require('@vercel/postgres');
+    const result = await sql`SELECT * FROM users WHERE id = ${id}`;
+    return result.rows[0];
+  } else {
+    return db.prepare('SELECT * FROM users WHERE id = ?').get(id);
+  }
 }
 
-// ============ Session Functions ============
-
-export function createSession(userId: string): string {
+export async function createSession(userId: string): Promise<string> {
   const id = uuidv4();
   const token = generateToken();
-  const expires_at = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(); // 7 days
-  
-  db.prepare(`
-    INSERT INTO sessions (id, user_id, token, expires_at)
-    VALUES (?, ?, ?, ?)
-  `).run(id, userId, token, expires_at);
-  
+  const expires_at = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+
+  if (isPostgres) {
+    const { sql } = require('@vercel/postgres');
+    await sql`INSERT INTO sessions (id, user_id, token, expires_at) VALUES (${id}, ${userId}, ${token}, ${expires_at})`;
+  } else {
+    db.prepare(`INSERT INTO sessions (id, user_id, token, expires_at) VALUES (?, ?, ?, ?)`).run(id, userId, token, expires_at);
+  }
+
   return token;
 }
 
-export function getSessionUser(token: string) {
-  const session = db.prepare(`
-    SELECT s.*, u.* FROM sessions s
-    JOIN users u ON s.user_id = u.id
-    WHERE s.token = ? AND s.expires_at > datetime('now')
-  `).get(token) as any;
-  
-  return session;
+export async function getSessionUser(token: string) {
+  if (isPostgres) {
+    const { sql } = require('@vercel/postgres');
+    const result = await sql`
+      SELECT s.user_id, u.* FROM sessions s
+      JOIN users u ON s.user_id = u.id
+      WHERE s.token = ${token} AND s.expires_at > NOW()
+    `;
+    return result.rows[0];
+  } else {
+    return db.prepare(`
+      SELECT s.user_id, u.* FROM sessions s
+      JOIN users u ON s.user_id = u.id
+      WHERE s.token = ? AND s.expires_at > datetime('now')
+    `).get(token);
+  }
 }
 
-export function deleteSession(token: string) {
-  db.prepare('DELETE FROM sessions WHERE token = ?').run(token);
+export async function deleteSession(token: string) {
+  if (isPostgres) {
+    const { sql } = require('@vercel/postgres');
+    await sql`DELETE FROM sessions WHERE token = ${token}`;
+  } else {
+    db.prepare('DELETE FROM sessions WHERE token = ?').run(token);
+  }
 }
 
-// ============ Bee Functions ============
-
-export function createBee(name: string, description?: string, skills?: string[]) {
+export async function createBee(name: string, description?: string, skills?: string[]) {
   const id = uuidv4();
   const api_key = generateApiKey();
-  
-  db.prepare(`
-    INSERT INTO bees (id, api_key, name, description, skills)
-    VALUES (?, ?, ?, ?, ?)
-  `).run(id, api_key, name, description || null, skills ? JSON.stringify(skills) : null);
-  
+
+  if (isPostgres) {
+    const { sql } = require('@vercel/postgres');
+    await sql`
+      INSERT INTO bees (id, api_key, name, description, skills)
+      VALUES (${id}, ${api_key}, ${name}, ${description || null}, ${skills ? JSON.stringify(skills) : null})
+    `;
+  } else {
+    db.prepare(`
+      INSERT INTO bees (id, api_key, name, description, skills)
+      VALUES (?, ?, ?, ?, ?)
+    `).run(id, api_key, name, description || null, skills ? JSON.stringify(skills) : null);
+  }
+
   return { id, api_key, name };
 }
 
-export function getBeeByApiKey(apiKey: string) {
-  const bee = db.prepare('SELECT * FROM bees WHERE api_key = ?').get(apiKey);
-  if (bee) {
-    db.prepare('UPDATE bees SET last_seen_at = CURRENT_TIMESTAMP WHERE api_key = ?').run(apiKey);
+export async function getBeeByApiKey(apiKey: string) {
+  if (isPostgres) {
+    const { sql } = require('@vercel/postgres');
+    const result = await sql`SELECT * FROM bees WHERE api_key = ${apiKey}`;
+    if (result.rows[0]) {
+      await sql`UPDATE bees SET last_seen_at = NOW() WHERE api_key = ${apiKey}`;
+    }
+    return result.rows[0];
+  } else {
+    const bee = db.prepare('SELECT * FROM bees WHERE api_key = ?').get(apiKey);
+    if (bee) {
+      db.prepare('UPDATE bees SET last_seen_at = CURRENT_TIMESTAMP WHERE api_key = ?').run(apiKey);
+    }
+    return bee;
   }
-  return bee;
 }
 
-export function getBeeById(id: string) {
-  return db.prepare('SELECT * FROM bees WHERE id = ?').get(id);
+export async function getBeeById(id: string) {
+  if (isPostgres) {
+    const { sql } = require('@vercel/postgres');
+    const result = await sql`SELECT * FROM bees WHERE id = ${id}`;
+    return result.rows[0];
+  } else {
+    return db.prepare('SELECT * FROM bees WHERE id = ?').get(id);
+  }
 }
 
-// ============ Gig Functions ============
-
-export function createGig(userId: string, data: { title: string; description?: string; requirements?: string; price_cents?: number; category?: string; deadline?: string }) {
+export async function createGig(userId: string, data: { title: string; description?: string; requirements?: string; price_cents?: number; category?: string; deadline?: string }) {
   const id = uuidv4();
-  
-  db.prepare(`
-    INSERT INTO gigs (id, user_id, title, description, requirements, price_cents, category, deadline, status)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'draft')
-  `).run(id, userId, data.title, data.description || null, data.requirements || null, data.price_cents || 0, data.category || null, data.deadline || null);
-  
+
+  if (isPostgres) {
+    const { sql } = require('@vercel/postgres');
+    await sql`
+      INSERT INTO gigs (id, user_id, title, description, requirements, price_cents, category, deadline, status)
+      VALUES (${id}, ${userId}, ${data.title}, ${data.description || null}, ${data.requirements || null}, ${data.price_cents || 0}, ${data.category || null}, ${data.deadline || null}, 'draft')
+    `;
+  } else {
+    db.prepare(`
+      INSERT INTO gigs (id, user_id, title, description, requirements, price_cents, category, deadline, status)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'draft')
+    `).run(id, userId, data.title, data.description || null, data.requirements || null, data.price_cents || 0, data.category || null, data.deadline || null);
+  }
+
   return { id, ...data };
 }
 
-export function updateGig(id: string, userId: string, data: Partial<{ title: string; description: string; requirements: string; price_cents: number; category: string; deadline: string; status: string }>) {
-  const fields = Object.keys(data).map(k => `${k} = ?`).join(', ');
-  const values = Object.values(data);
-  
-  db.prepare(`
-    UPDATE gigs SET ${fields}, updated_at = CURRENT_TIMESTAMP
-    WHERE id = ? AND user_id = ?
-  `).run(...values, id, userId);
+export async function updateGig(id: string, userId: string, data: any) {
+  if (isPostgres) {
+    const { sql } = require('@vercel/postgres');
+    // For simplicity, handle common updates
+    if (data.status) {
+      await sql`UPDATE gigs SET status = ${data.status}, updated_at = NOW() WHERE id = ${id} AND user_id = ${userId}`;
+    }
+    if (data.title) {
+      await sql`UPDATE gigs SET title = ${data.title}, updated_at = NOW() WHERE id = ${id} AND user_id = ${userId}`;
+    }
+  } else {
+    const fields = Object.keys(data).map(k => `${k} = ?`).join(', ');
+    const values = Object.values(data);
+    db.prepare(`UPDATE gigs SET ${fields}, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?`).run(...values, id, userId);
+  }
 }
 
-export function getGigById(id: string) {
-  return db.prepare(`
-    SELECT g.*, u.name as user_name, u.email as user_email,
-      (SELECT COUNT(*) FROM gig_assignments WHERE gig_id = g.id) as bee_count,
-      (SELECT COUNT(*) FROM bids WHERE gig_id = g.id AND status = 'pending') as bid_count
-    FROM gigs g
-    JOIN users u ON g.user_id = u.id
-    WHERE g.id = ?
-  `).get(id);
+export async function getGigById(id: string) {
+  if (isPostgres) {
+    const { sql } = require('@vercel/postgres');
+    const result = await sql`
+      SELECT g.*, u.name as user_name, u.email as user_email,
+        (SELECT COUNT(*)::int FROM gig_assignments WHERE gig_id = g.id) as bee_count,
+        (SELECT COUNT(*)::int FROM bids WHERE gig_id = g.id AND status = 'pending') as bid_count
+      FROM gigs g
+      JOIN users u ON g.user_id = u.id
+      WHERE g.id = ${id}
+    `;
+    return result.rows[0];
+  } else {
+    return db.prepare(`
+      SELECT g.*, u.name as user_name, u.email as user_email,
+        (SELECT COUNT(*) FROM gig_assignments WHERE gig_id = g.id) as bee_count,
+        (SELECT COUNT(*) FROM bids WHERE gig_id = g.id AND status = 'pending') as bid_count
+      FROM gigs g
+      JOIN users u ON g.user_id = u.id
+      WHERE g.id = ?
+    `).get(id);
+  }
 }
 
-export function listGigs(options: { status?: string; userId?: string; limit?: number; offset?: number } = {}) {
-  let query = `
-    SELECT g.*, u.name as user_name,
-      (SELECT COUNT(*) FROM gig_assignments WHERE gig_id = g.id) as bee_count,
-      (SELECT COUNT(*) FROM bids WHERE gig_id = g.id AND status = 'pending') as bid_count
-    FROM gigs g
-    JOIN users u ON g.user_id = u.id
-    WHERE 1=1
-  `;
-  const params: any[] = [];
-  
-  if (options.status) {
-    query += ' AND g.status = ?';
-    params.push(options.status);
+export async function listGigs(options: { status?: string; userId?: string; limit?: number; offset?: number } = {}) {
+  if (isPostgres) {
+    const { sql } = require('@vercel/postgres');
+    let result;
+    if (options.userId) {
+      result = await sql`
+        SELECT g.*, u.name as user_name,
+          (SELECT COUNT(*)::int FROM gig_assignments WHERE gig_id = g.id) as bee_count,
+          (SELECT COUNT(*)::int FROM bids WHERE gig_id = g.id AND status = 'pending') as bid_count
+        FROM gigs g
+        JOIN users u ON g.user_id = u.id
+        WHERE g.user_id = ${options.userId}
+        ORDER BY g.created_at DESC
+        LIMIT ${options.limit || 50}
+      `;
+    } else if (options.status) {
+      result = await sql`
+        SELECT g.*, u.name as user_name,
+          (SELECT COUNT(*)::int FROM gig_assignments WHERE gig_id = g.id) as bee_count,
+          (SELECT COUNT(*)::int FROM bids WHERE gig_id = g.id AND status = 'pending') as bid_count
+        FROM gigs g
+        JOIN users u ON g.user_id = u.id
+        WHERE g.status = ${options.status}
+        ORDER BY g.created_at DESC
+        LIMIT ${options.limit || 50}
+      `;
+    } else {
+      result = await sql`
+        SELECT g.*, u.name as user_name,
+          (SELECT COUNT(*)::int FROM gig_assignments WHERE gig_id = g.id) as bee_count,
+          (SELECT COUNT(*)::int FROM bids WHERE gig_id = g.id AND status = 'pending') as bid_count
+        FROM gigs g
+        JOIN users u ON g.user_id = u.id
+        ORDER BY g.created_at DESC
+        LIMIT ${options.limit || 50}
+      `;
+    }
+    return result.rows;
+  } else {
+    let query = `
+      SELECT g.*, u.name as user_name,
+        (SELECT COUNT(*) FROM gig_assignments WHERE gig_id = g.id) as bee_count,
+        (SELECT COUNT(*) FROM bids WHERE gig_id = g.id AND status = 'pending') as bid_count
+      FROM gigs g
+      JOIN users u ON g.user_id = u.id
+      WHERE 1=1
+    `;
+    const params: any[] = [];
+
+    if (options.status) {
+      query += ' AND g.status = ?';
+      params.push(options.status);
+    }
+    if (options.userId) {
+      query += ' AND g.user_id = ?';
+      params.push(options.userId);
+    }
+
+    query += ' ORDER BY g.created_at DESC';
+    if (options.limit) {
+      query += ' LIMIT ?';
+      params.push(options.limit);
+    }
+
+    return db.prepare(query).all(...params);
   }
-  if (options.userId) {
-    query += ' AND g.user_id = ?';
-    params.push(options.userId);
-  }
-  
-  query += ' ORDER BY g.created_at DESC';
-  
-  if (options.limit) {
-    query += ' LIMIT ?';
-    params.push(options.limit);
-  }
-  if (options.offset) {
-    query += ' OFFSET ?';
-    params.push(options.offset);
-  }
-  
-  return db.prepare(query).all(...params);
 }
 
-// ============ Bid Functions ============
-
-export function createBid(gigId: string, beeId: string, proposal: string, estimatedHours?: number, honeyRequested?: number) {
+export async function createBid(gigId: string, beeId: string, proposal: string, estimatedHours?: number, honeyRequested?: number) {
   const id = uuidv4();
-  
-  db.prepare(`
-    INSERT INTO bids (id, gig_id, bee_id, proposal, estimated_hours, honey_requested)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `).run(id, gigId, beeId, proposal, estimatedHours || null, honeyRequested || null);
-  
+
+  if (isPostgres) {
+    const { sql } = require('@vercel/postgres');
+    await sql`
+      INSERT INTO bids (id, gig_id, bee_id, proposal, estimated_hours, honey_requested)
+      VALUES (${id}, ${gigId}, ${beeId}, ${proposal}, ${estimatedHours || null}, ${honeyRequested || null})
+    `;
+  } else {
+    db.prepare(`
+      INSERT INTO bids (id, gig_id, bee_id, proposal, estimated_hours, honey_requested)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(id, gigId, beeId, proposal, estimatedHours || null, honeyRequested || null);
+  }
+
   return { id };
 }
 
-export function getBidsForGig(gigId: string) {
-  return db.prepare(`
-    SELECT b.*, bee.name as bee_name, bee.reputation, bee.gigs_completed
-    FROM bids b
-    JOIN bees bee ON b.bee_id = bee.id
-    WHERE b.gig_id = ?
-    ORDER BY b.created_at DESC
-  `).all(gigId);
+export async function getBidsForGig(gigId: string) {
+  if (isPostgres) {
+    const { sql } = require('@vercel/postgres');
+    const result = await sql`
+      SELECT b.*, bee.name as bee_name, bee.reputation, bee.gigs_completed
+      FROM bids b
+      JOIN bees bee ON b.bee_id = bee.id
+      WHERE b.gig_id = ${gigId}
+      ORDER BY b.created_at DESC
+    `;
+    return result.rows;
+  } else {
+    return db.prepare(`
+      SELECT b.*, bee.name as bee_name, bee.reputation, bee.gigs_completed
+      FROM bids b
+      JOIN bees bee ON b.bee_id = bee.id
+      WHERE b.gig_id = ?
+      ORDER BY b.created_at DESC
+    `).all(gigId);
+  }
 }
 
-export function acceptBid(bidId: string, gigId: string, userId: string) {
-  // Verify ownership
-  const gig = db.prepare('SELECT * FROM gigs WHERE id = ? AND user_id = ?').get(gigId, userId);
-  if (!gig) return false;
-  
-  const bid = db.prepare('SELECT * FROM bids WHERE id = ? AND gig_id = ?').get(bidId, gigId) as any;
-  if (!bid) return false;
-  
-  // Accept this bid
-  db.prepare("UPDATE bids SET status = 'accepted' WHERE id = ?").run(bidId);
-  
-  // Reject other bids
-  db.prepare("UPDATE bids SET status = 'rejected' WHERE gig_id = ? AND id != ?").run(gigId, bidId);
-  
-  // Create assignment
-  const assignId = uuidv4();
-  db.prepare(`
-    INSERT INTO gig_assignments (id, gig_id, bee_id, honey_split)
-    VALUES (?, ?, ?, 100)
-  `).run(assignId, gigId, bid.bee_id);
-  
-  // Update gig status
-  db.prepare("UPDATE gigs SET status = 'in_progress', updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(gigId);
-  
-  return true;
+export async function acceptBid(bidId: string, gigId: string, userId: string) {
+  if (isPostgres) {
+    const { sql } = require('@vercel/postgres');
+    
+    const gigResult = await sql`SELECT * FROM gigs WHERE id = ${gigId} AND user_id = ${userId}`;
+    if (gigResult.rows.length === 0) return false;
+
+    const bidResult = await sql`SELECT * FROM bids WHERE id = ${bidId} AND gig_id = ${gigId}`;
+    if (bidResult.rows.length === 0) return false;
+    const bid = bidResult.rows[0];
+
+    await sql`UPDATE bids SET status = 'accepted' WHERE id = ${bidId}`;
+    await sql`UPDATE bids SET status = 'rejected' WHERE gig_id = ${gigId} AND id != ${bidId}`;
+
+    const assignId = uuidv4();
+    await sql`INSERT INTO gig_assignments (id, gig_id, bee_id, honey_split) VALUES (${assignId}, ${gigId}, ${bid.bee_id}, 100)`;
+    await sql`UPDATE gigs SET status = 'in_progress', updated_at = NOW() WHERE id = ${gigId}`;
+
+    return true;
+  } else {
+    const gig = db.prepare('SELECT * FROM gigs WHERE id = ? AND user_id = ?').get(gigId, userId);
+    if (!gig) return false;
+
+    const bid = db.prepare('SELECT * FROM bids WHERE id = ? AND gig_id = ?').get(bidId, gigId) as any;
+    if (!bid) return false;
+
+    db.prepare("UPDATE bids SET status = 'accepted' WHERE id = ?").run(bidId);
+    db.prepare("UPDATE bids SET status = 'rejected' WHERE gig_id = ? AND id != ?").run(gigId, bidId);
+
+    const assignId = uuidv4();
+    db.prepare(`INSERT INTO gig_assignments (id, gig_id, bee_id, honey_split) VALUES (?, ?, ?, 100)`).run(assignId, gigId, bid.bee_id);
+    db.prepare("UPDATE gigs SET status = 'in_progress', updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(gigId);
+
+    return true;
+  }
 }
 
-// ============ Deliverable Functions ============
-
-export function submitDeliverable(gigId: string, beeId: string, data: { title: string; type?: string; content?: string; url?: string }) {
+export async function submitDeliverable(gigId: string, beeId: string, data: { title: string; type?: string; content?: string; url?: string }) {
   const id = uuidv4();
-  
-  db.prepare(`
-    INSERT INTO deliverables (id, gig_id, bee_id, title, type, content, url)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `).run(id, gigId, beeId, data.title, data.type || null, data.content || null, data.url || null);
-  
-  // Update gig status to review
-  db.prepare("UPDATE gigs SET status = 'review', updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(gigId);
-  
+
+  if (isPostgres) {
+    const { sql } = require('@vercel/postgres');
+    await sql`
+      INSERT INTO deliverables (id, gig_id, bee_id, title, type, content, url)
+      VALUES (${id}, ${gigId}, ${beeId}, ${data.title}, ${data.type || null}, ${data.content || null}, ${data.url || null})
+    `;
+    await sql`UPDATE gigs SET status = 'review', updated_at = NOW() WHERE id = ${gigId}`;
+  } else {
+    db.prepare(`
+      INSERT INTO deliverables (id, gig_id, bee_id, title, type, content, url)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(id, gigId, beeId, data.title, data.type || null, data.content || null, data.url || null);
+    db.prepare("UPDATE gigs SET status = 'review', updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(gigId);
+  }
+
   return { id };
 }
 
-export function approveDeliverable(deliverableId: string, gigId: string, userId: string) {
-  // Verify ownership
-  const gig = db.prepare('SELECT * FROM gigs WHERE id = ? AND user_id = ?').get(gigId, userId) as any;
-  if (!gig) return false;
-  
-  const deliverable = db.prepare('SELECT * FROM deliverables WHERE id = ? AND gig_id = ?').get(deliverableId, gigId) as any;
-  if (!deliverable) return false;
-  
-  // Approve deliverable
-  db.prepare("UPDATE deliverables SET status = 'approved' WHERE id = ?").run(deliverableId);
-  
-  // Mark gig complete
-  db.prepare("UPDATE gigs SET status = 'completed', updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(gigId);
-  
-  // Award honey
-  const honeyAmount = gig.price_cents; // 1 cent = 1 honey for now
-  awardHoney(deliverable.bee_id, gigId, honeyAmount, 'gig_completed');
-  
-  return true;
+export async function approveDeliverable(deliverableId: string, gigId: string, userId: string) {
+  if (isPostgres) {
+    const { sql } = require('@vercel/postgres');
+
+    const gigResult = await sql`SELECT * FROM gigs WHERE id = ${gigId} AND user_id = ${userId}`;
+    if (gigResult.rows.length === 0) return false;
+    const gig = gigResult.rows[0];
+
+    const delResult = await sql`SELECT * FROM deliverables WHERE id = ${deliverableId} AND gig_id = ${gigId}`;
+    if (delResult.rows.length === 0) return false;
+    const deliverable = delResult.rows[0];
+
+    await sql`UPDATE deliverables SET status = 'approved' WHERE id = ${deliverableId}`;
+    await sql`UPDATE gigs SET status = 'completed', updated_at = NOW() WHERE id = ${gigId}`;
+
+    await awardHoney(deliverable.bee_id, gigId, gig.price_cents, 'gig_completed');
+
+    return true;
+  } else {
+    const gig = db.prepare('SELECT * FROM gigs WHERE id = ? AND user_id = ?').get(gigId, userId) as any;
+    if (!gig) return false;
+
+    const deliverable = db.prepare('SELECT * FROM deliverables WHERE id = ? AND gig_id = ?').get(deliverableId, gigId) as any;
+    if (!deliverable) return false;
+
+    db.prepare("UPDATE deliverables SET status = 'approved' WHERE id = ?").run(deliverableId);
+    db.prepare("UPDATE gigs SET status = 'completed', updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(gigId);
+
+    await awardHoney(deliverable.bee_id, gigId, gig.price_cents, 'gig_completed');
+
+    return true;
+  }
 }
 
-// ============ Honey Functions ============
-
-export function awardHoney(beeId: string, gigId: string | null, amount: number, type: string, note?: string) {
+export async function awardHoney(beeId: string, gigId: string | null, amount: number, type: string, note?: string) {
   const id = uuidv4();
-  db.prepare(`
-    INSERT INTO honey_ledger (id, bee_id, gig_id, amount, type, note)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `).run(id, beeId, gigId, amount, type, note || null);
-  
-  db.prepare('UPDATE bees SET honey = honey + ? WHERE id = ?').run(amount, beeId);
-  
-  if (type === 'gig_completed') {
-    db.prepare('UPDATE bees SET gigs_completed = gigs_completed + 1 WHERE id = ?').run(beeId);
+
+  if (isPostgres) {
+    const { sql } = require('@vercel/postgres');
+    await sql`
+      INSERT INTO honey_ledger (id, bee_id, gig_id, amount, type, note)
+      VALUES (${id}, ${beeId}, ${gigId}, ${amount}, ${type}, ${note || null})
+    `;
+    await sql`UPDATE bees SET honey = honey + ${amount} WHERE id = ${beeId}`;
+    if (type === 'gig_completed') {
+      await sql`UPDATE bees SET gigs_completed = gigs_completed + 1 WHERE id = ${beeId}`;
+    }
+  } else {
+    db.prepare(`
+      INSERT INTO honey_ledger (id, bee_id, gig_id, amount, type, note)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(id, beeId, gigId, amount, type, note || null);
+    db.prepare('UPDATE bees SET honey = honey + ? WHERE id = ?').run(amount, beeId);
+    if (type === 'gig_completed') {
+      db.prepare('UPDATE bees SET gigs_completed = gigs_completed + 1 WHERE id = ?').run(beeId);
+    }
   }
 }
 
-export function updateBeeReputation(beeId: string) {
-  const stats = db.prepare(`
-    SELECT AVG(rating) as avg_rating, COUNT(*) as review_count
-    FROM reviews WHERE bee_id = ?
-  `).get(beeId) as any;
-  
-  if (stats && stats.review_count > 0) {
-    db.prepare('UPDATE bees SET reputation = ? WHERE id = ?').run(stats.avg_rating, beeId);
+export async function getGigStats() {
+  if (isPostgres) {
+    const { sql } = require('@vercel/postgres');
+    const result = await sql`
+      SELECT 
+        (SELECT COUNT(*)::int FROM gigs WHERE status = 'open') as open_gigs,
+        (SELECT COUNT(*)::int FROM gigs WHERE status = 'in_progress') as in_progress,
+        (SELECT COUNT(*)::int FROM gigs WHERE status = 'completed') as completed,
+        (SELECT COUNT(*)::int FROM bees) as total_bees,
+        (SELECT COALESCE(SUM(honey), 0)::int FROM bees) as total_honey
+    `;
+    return result.rows[0];
+  } else {
+    return db.prepare(`
+      SELECT 
+        (SELECT COUNT(*) FROM gigs WHERE status = 'open') as open_gigs,
+        (SELECT COUNT(*) FROM gigs WHERE status = 'in_progress') as in_progress,
+        (SELECT COUNT(*) FROM gigs WHERE status = 'completed') as completed,
+        (SELECT COUNT(*) FROM bees) as total_bees,
+        (SELECT COALESCE(SUM(honey), 0) FROM bees) as total_honey
+    `).get();
   }
 }
 
-// ============ Stats Functions ============
+export async function beeNameExists(name: string): Promise<boolean> {
+  if (isPostgres) {
+    const { sql } = require('@vercel/postgres');
+    const result = await sql`SELECT id FROM bees WHERE LOWER(name) = LOWER(${name})`;
+    return result.rows.length > 0;
+  } else {
+    return !!db.prepare('SELECT id FROM bees WHERE LOWER(name) = LOWER(?)').get(name);
+  }
+}
 
-export function getGigStats() {
-  return db.prepare(`
-    SELECT 
-      (SELECT COUNT(*) FROM gigs WHERE status = 'open') as open_gigs,
-      (SELECT COUNT(*) FROM gigs WHERE status = 'in_progress') as in_progress,
-      (SELECT COUNT(*) FROM gigs WHERE status = 'completed') as completed,
-      (SELECT COUNT(*) FROM bees) as total_bees,
-      (SELECT COALESCE(SUM(honey), 0) FROM bees) as total_honey
-  `).get();
+export async function getGigAssignment(gigId: string, beeId: string) {
+  if (isPostgres) {
+    const { sql } = require('@vercel/postgres');
+    const result = await sql`SELECT * FROM gig_assignments WHERE gig_id = ${gigId} AND bee_id = ${beeId}`;
+    return result.rows[0];
+  } else {
+    return db.prepare('SELECT * FROM gig_assignments WHERE gig_id = ? AND bee_id = ?').get(gigId, beeId);
+  }
 }
 
 export { db };

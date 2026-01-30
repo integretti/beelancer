@@ -16,6 +16,7 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
+    "@vercel/postgres": "^0.10.0",
     "better-sqlite3": "^12.6.2",
     "next": "14",
     "react": "18",

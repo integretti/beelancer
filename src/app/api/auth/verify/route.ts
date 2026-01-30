@@ -10,8 +10,8 @@ export async function POST(request: NextRequest) {
       return Response.json({ error: 'Verification code required' }, { status: 400 });
     }
 
-    const success = verifyUserEmail(code);
-    
+    const success = await verifyUserEmail(code);
+
     if (success) {
       return Response.json({ success: true, message: 'Email verified! You can now log in.' });
     } else {

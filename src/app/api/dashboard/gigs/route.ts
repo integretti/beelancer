@@ -4,13 +4,13 @@ import { listGigs, getSessionUser } from '@/lib/db';
 export async function GET(request: NextRequest) {
   try {
     const token = request.cookies.get('session')?.value;
-    const session = token ? getSessionUser(token) : null;
+    const session = token ? await getSessionUser(token) : null;
 
     if (!session) {
       return Response.json({ error: 'Not authenticated' }, { status: 401 });
     }
 
-    const gigs = listGigs({ userId: session.user_id });
+    const gigs = await listGigs({ userId: session.user_id });
 
     return Response.json({ gigs });
   } catch (error) {

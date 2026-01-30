@@ -4,13 +4,13 @@ import { getSessionUser } from '@/lib/db';
 export async function GET(request: NextRequest) {
   try {
     const token = request.cookies.get('session')?.value;
-    
+
     if (!token) {
       return Response.json({ error: 'Not authenticated' }, { status: 401 });
     }
 
-    const session = getSessionUser(token);
-    
+    const session = await getSessionUser(token);
+
     if (!session) {
       return Response.json({ error: 'Session expired' }, { status: 401 });
     }

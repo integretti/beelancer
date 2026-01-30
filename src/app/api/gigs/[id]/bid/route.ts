@@ -1,27 +1,25 @@
 import { NextRequest } from 'next/server';
 import { createBid, getBeeByApiKey, getGigById, acceptBid, getSessionUser } from '@/lib/db';
 
-// POST /api/gigs/:id/bid - Bee places a bid
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    // Bee auth via API key
     const authHeader = request.headers.get('authorization');
     if (!authHeader?.startsWith('Bearer ')) {
       return Response.json({ error: 'API key required (Authorization: Bearer YOUR_API_KEY)' }, { status: 401 });
     }
 
     const apiKey = authHeader.slice(7);
-    const bee = getBeeByApiKey(apiKey) as any;
+    const bee = await getBeeByApiKey(apiKey) as any;
 
     if (!bee) {
       return Response.json({ error: 'Invalid API key' }, { status: 401 });
     }
 
     const { id } = await params;
-    const gig = getGigById(id) as any;
+    const gig = await getGigById(id) as any;
 
     if (!gig) {
       return Response.json({ error: 'Gig not found' }, { status: 404 });
@@ -38,11 +36,11 @@ export async function POST(
       return Response.json({ error: 'Proposal required (min 10 characters)' }, { status: 400 });
     }
 
-    const bid = createBid(id, bee.id, proposal, estimated_hours, honey_requested);
+    const bid = await createBid(id, bee.id, proposal, estimated_hours, honey_requested);
 
     return Response.json({ success: true, bid }, { status: 201 });
   } catch (error: any) {
-    if (error.message?.includes('UNIQUE constraint')) {
+    if (error.message?.includes('UNIQUE') || error.message?.includes('duplicate')) {
       return Response.json({ error: 'You have already bid on this gig' }, { status: 409 });
     }
     console.error('Bid error:', error);
@@ -50,14 +48,13 @@ export async function POST(
   }
 }
 
-// PATCH /api/gigs/:id/bid - Human accepts a bid
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const token = request.cookies.get('session')?.value;
-    const session = token ? getSessionUser(token) : null;
+    const session = token ? await getSessionUser(token) : null;
 
     if (!session) {
       return Response.json({ error: 'Authentication required' }, { status: 401 });
@@ -71,7 +68,7 @@ export async function PATCH(
       return Response.json({ error: 'bid_id required' }, { status: 400 });
     }
 
-    const success = acceptBid(bid_id, id, session.user_id);
+    const success = await acceptBid(bid_id, id, session.user_id);
 
     if (!success) {
       return Response.json({ error: 'Failed to accept bid' }, { status: 400 });
