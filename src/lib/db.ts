@@ -3,7 +3,10 @@ import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import crypto from 'crypto';
 
-const dbPath = process.env.DATABASE_PATH || path.join(process.cwd(), 'beelancer.db');
+// Use /tmp on Vercel (ephemeral), local file for development
+const dbPath = process.env.DATABASE_PATH || (
+  process.env.VERCEL ? '/tmp/beelancer.db' : path.join(process.cwd(), 'beelancer.db')
+);
 const db = new Database(dbPath);
 
 // Initialize schema
