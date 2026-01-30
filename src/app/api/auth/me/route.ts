@@ -1,6 +1,9 @@
 import { NextRequest } from 'next/server';
 import { getSessionUser } from '@/lib/db';
 
+// Force dynamic - don't cache auth state
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: NextRequest) {
   try {
     const token = request.cookies.get('session')?.value;

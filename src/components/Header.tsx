@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 
 interface User {
   id: string;
@@ -12,23 +12,80 @@ interface User {
 
 export default function Header() {
   const router = useRouter();
+  const pathname = usePathname();
   const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [checked, setChecked] = useState(false);
 
-  useEffect(() => {
-    fetch('/api/auth/me')
-      .then(r => r.ok ? r.json() : null)
-      .then(data => {
-        setUser(data?.user || null);
-        setLoading(false);
-      })
-      .catch(() => setLoading(false));
+  const checkAuth = useCallback(async () => {
+    try {
+      const res = await fetch('/api/auth/me', { 
+        credentials: 'include',
+        cache: 'no-store'
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setUser(data.user);
+      } else {
+        setUser(null);
+      }
+    } catch {
+      setUser(null);
+    }
+    setChecked(true);
   }, []);
 
+  useEffect(() => {
+    checkAuth();
+  }, [pathname, checkAuth]);
+
   const handleLogout = async () => {
-    await fetch('/api/auth/logout', { method: 'POST' });
+    await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
     setUser(null);
     router.push('/');
+    router.refresh();
+  };
+
+  // Don't render nav until we've checked auth to prevent flicker
+  const renderNav = () => {
+    if (!checked) {
+      return <div className="w-20" />; // Placeholder to prevent layout shift
+    }
+    
+    if (user) {
+      return (
+        <>
+          <Link href="/dashboard" className="text-gray-400 hover:text-white text-sm transition-colors">
+            Dashboard
+          </Link>
+          <button 
+            onClick={handleLogout}
+            className="text-gray-400 hover:text-white text-sm transition-colors"
+          >
+            Logout
+          </button>
+          <Link 
+            href="/dashboard?new=1" 
+            className="bg-gradient-to-r from-yellow-500 to-amber-500 hover:from-yellow-400 hover:to-amber-400 text-black px-4 py-2 rounded-lg text-sm font-semibold transition-all hover:shadow-lg hover:shadow-yellow-500/20"
+          >
+            Post a Gig
+          </Link>
+        </>
+      );
+    }
+    
+    return (
+      <>
+        <Link href="/login" className="text-gray-400 hover:text-white text-sm transition-colors">
+          Login
+        </Link>
+        <Link 
+          href="/signup" 
+          className="bg-gradient-to-r from-yellow-500 to-amber-500 hover:from-yellow-400 hover:to-amber-400 text-black px-4 py-2 rounded-lg text-sm font-semibold transition-all hover:shadow-lg hover:shadow-yellow-500/20"
+        >
+          Post a Gig
+        </Link>
+      </>
+    );
   };
 
   return (
@@ -42,39 +99,7 @@ export default function Header() {
         </Link>
         
         <nav className="flex items-center gap-4">
-          {loading ? (
-            <span className="text-gray-500 text-sm">...</span>
-          ) : user ? (
-            <>
-              <Link href="/dashboard" className="text-gray-400 hover:text-white text-sm transition-colors">
-                Dashboard
-              </Link>
-              <button 
-                onClick={handleLogout}
-                className="text-gray-400 hover:text-white text-sm transition-colors"
-              >
-                Logout
-              </button>
-              <Link 
-                href="/dashboard?new=1" 
-                className="bg-gradient-to-r from-yellow-500 to-amber-500 hover:from-yellow-400 hover:to-amber-400 text-black px-4 py-2 rounded-lg text-sm font-semibold transition-all hover:shadow-lg hover:shadow-yellow-500/20"
-              >
-                Post a Gig
-              </Link>
-            </>
-          ) : (
-            <>
-              <Link href="/login" className="text-gray-400 hover:text-white text-sm transition-colors">
-                Login
-              </Link>
-              <Link 
-                href="/signup" 
-                className="bg-gradient-to-r from-yellow-500 to-amber-500 hover:from-yellow-400 hover:to-amber-400 text-black px-4 py-2 rounded-lg text-sm font-semibold transition-all hover:shadow-lg hover:shadow-yellow-500/20"
-              >
-                Post a Gig
-              </Link>
-            </>
-          )}
+          {renderNav()}
         </nav>
       </div>
     </header>
