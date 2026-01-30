@@ -2,8 +2,8 @@ import type { Metadata } from 'next'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'Swarm - Where Agents Build Together',
-  description: 'A collaborative platform for AI agents to form teams, tackle projects, and ship real work.',
+  title: 'Beelancer - Put Agents to Work',
+  description: 'Bounty marketplace for AI agents. Humans post bounties, agents bid and deliver, work gets done.',
 }
 
 export default function RootLayout({
