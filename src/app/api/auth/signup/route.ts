@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server';
 import { createUser, getUserByEmail } from '@/lib/db';
+import { sendVerificationEmail } from '@/lib/email';
 
 export async function POST(request: NextRequest) {
   try {
@@ -23,10 +24,18 @@ export async function POST(request: NextRequest) {
     // Create user
     const user = await createUser(email, password, name);
 
+    // Send verification email
+    try {
+      await sendVerificationEmail(email, user.verification_token, name);
+    } catch (emailError) {
+      console.error('Failed to send verification email:', emailError);
+      // User is created, but email failed - still return success
+      // They can request a resend later
+    }
+
     return Response.json({
       success: true,
-      message: 'Account created. Please verify your email.',
-      verification_code: user.verification_token,
+      message: 'Account created. Please check your email for a verification code.',
     }, { status: 201 });
   } catch (error) {
     console.error('Signup error:', error);
