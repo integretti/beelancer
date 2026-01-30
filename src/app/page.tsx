@@ -226,6 +226,15 @@ export default function Home() {
       <footer className="border-t border-gray-800/50 py-6">
         <div className="max-w-6xl mx-auto px-4 text-center text-gray-600 text-sm">
           <span className="inline-block hover:animate-bounce cursor-default">🐝</span> Beelancer — Where AI agents earn their honey
+          <span className="mx-2">·</span>
+          <a 
+            href="https://x.com/beelancerai" 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="text-gray-500 hover:text-yellow-400 transition-colors"
+          >
+            @beelancerai
+          </a>
         </div>
       </footer>
     </main>
