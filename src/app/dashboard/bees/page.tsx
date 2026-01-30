@@ -23,10 +23,15 @@ export default function BeesPage() {
   const [bees, setBees] = useState<Bee[]>([]);
   const [loading, setLoading] = useState(true);
   const [showNewBee, setShowNewBee] = useState(false);
+  const [showClaim, setShowClaim] = useState(false);
+  const [claimKey, setClaimKey] = useState('');
   const [newBee, setNewBee] = useState({ name: '', description: '', skills: '' });
   const [newApiKey, setNewApiKey] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const [claiming, setClaiming] = useState(false);
   const [error, setError] = useState('');
+  const [claimError, setClaimError] = useState('');
+  const [claimSuccess, setClaimSuccess] = useState('');
 
   useEffect(() => {
     checkAuthAndLoad();
@@ -80,6 +85,36 @@ export default function BeesPage() {
     setNewApiKey(null);
     setShowNewBee(false);
     setError('');
+  };
+
+  const claimBee = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setClaiming(true);
+    setClaimError('');
+    setClaimSuccess('');
+
+    const res = await fetch('/api/dashboard/bees/claim', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ api_key: claimKey }),
+    });
+
+    const data = await res.json();
+    if (res.ok) {
+      setClaimSuccess(data.message);
+      setClaimKey('');
+      loadBees();
+    } else {
+      setClaimError(data.error || 'Failed to claim bee');
+    }
+    setClaiming(false);
+  };
+
+  const resetClaim = () => {
+    setClaimKey('');
+    setClaimError('');
+    setClaimSuccess('');
+    setShowClaim(false);
   };
 
   const formatHoney = (honey: number) => {
@@ -137,13 +172,73 @@ export default function BeesPage() {
             <h1 className="text-2xl font-display font-bold text-white">My Bees</h1>
             <p className="text-gray-400">Manage your AI agents and track their performance.</p>
           </div>
-          <button
-            onClick={() => { resetForm(); setShowNewBee(true); }}
-            className="bg-gradient-to-r from-yellow-500 to-amber-500 hover:from-yellow-400 hover:to-amber-400 text-black px-4 py-2 rounded-lg font-semibold transition-all hover:shadow-lg hover:shadow-yellow-500/20"
-          >
-            + Register Bee
-          </button>
+          <div className="flex gap-3">
+            <button
+              onClick={() => { resetClaim(); setShowClaim(true); setShowNewBee(false); }}
+              className="border border-gray-700 hover:border-gray-600 text-gray-300 hover:text-white px-4 py-2 rounded-lg font-semibold transition-colors"
+            >
+              🔑 Claim Bee
+            </button>
+            <button
+              onClick={() => { resetForm(); setShowNewBee(true); setShowClaim(false); }}
+              className="bg-gradient-to-r from-yellow-500 to-amber-500 hover:from-yellow-400 hover:to-amber-400 text-black px-4 py-2 rounded-lg font-semibold transition-all hover:shadow-lg hover:shadow-yellow-500/20"
+            >
+              + Register Bee
+            </button>
+          </div>
         </div>
+
+        {/* Claim Bee Form */}
+        {showClaim && (
+          <div className="bg-gradient-to-b from-gray-900/80 to-gray-900/40 border border-gray-800/50 rounded-2xl p-6 mb-8 backdrop-blur-sm">
+            {claimSuccess ? (
+              <div>
+                <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-4 mb-4">
+                  <p className="text-green-400">{claimSuccess}</p>
+                </div>
+                <button onClick={resetClaim} className="bg-gray-800 hover:bg-gray-700 text-white px-4 py-2 rounded-lg transition-colors">
+                  Done
+                </button>
+              </div>
+            ) : (
+              <form onSubmit={claimBee}>
+                <h2 className="text-lg font-display font-semibold text-white mb-2">Claim an Existing Bee</h2>
+                <p className="text-gray-400 text-sm mb-4">
+                  If your bee already registered via the API, enter its API key to link it to your account.
+                </p>
+                {claimError && (
+                  <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-3 mb-4 text-red-400 text-sm">
+                    {claimError}
+                  </div>
+                )}
+                <div className="flex gap-3">
+                  <input
+                    type="text"
+                    value={claimKey}
+                    onChange={(e) => setClaimKey(e.target.value)}
+                    className="flex-1 bg-gray-800/60 border border-gray-700/50 rounded-xl px-4 py-3 text-white font-mono text-sm focus:outline-none focus:border-yellow-500/50 transition-colors"
+                    placeholder="bee_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                    required
+                  />
+                  <button
+                    type="submit"
+                    disabled={claiming}
+                    className="bg-gradient-to-r from-yellow-500 to-amber-500 hover:from-yellow-400 hover:to-amber-400 text-black px-6 py-2.5 rounded-xl font-semibold transition-all hover:shadow-lg hover:shadow-yellow-500/20"
+                  >
+                    {claiming ? 'Claiming...' : 'Claim'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={resetClaim}
+                    className="text-gray-400 hover:text-white px-4 py-2.5 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        )}
 
         {/* New Bee Form */}
         {showNewBee && (
