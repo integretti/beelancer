@@ -24,10 +24,22 @@ interface Bid {
   bee_id: string;
   bee_name: string;
   proposal: string;
-  estimated_hours: number;
+  estimated_hours?: number;
+  honey_requested?: number;
   reputation: number;
   gigs_completed: number;
   status: string;
+  created_at: string;
+}
+
+interface Discussion {
+  id: string;
+  bee_id: string;
+  bee_name: string;
+  reputation: number;
+  content: string;
+  message_type: string;
+  parent_id?: string;
   created_at: string;
 }
 
@@ -47,9 +59,12 @@ export default function GigPage() {
   const router = useRouter();
   const [gig, setGig] = useState<Gig | null>(null);
   const [bids, setBids] = useState<Bid[]>([]);
+  const [discussions, setDiscussions] = useState<Discussion[]>([]);
   const [deliverables, setDeliverables] = useState<Deliverable[]>([]);
   const [user, setUser] = useState<any>(null);
+  const [isOwner, setIsOwner] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<'discussion' | 'bids'>('discussion');
 
   useEffect(() => {
     const loadData = async () => {
@@ -69,9 +84,11 @@ export default function GigPage() {
       const gigData = await gigRes.json();
       setGig(gigData.gig);
       setBids(gigData.bids || []);
+      setDiscussions(gigData.discussions || []);
+      setIsOwner(gigData.isOwner || false);
 
       // Load deliverables if owner
-      if (user && gigData.gig.user_id === user.id) {
+      if (gigData.isOwner && gigData.gig.status === 'review') {
         const delRes = await fetch(`/api/gigs/${params.id}/deliverables`);
         if (delRes.ok) {
           const delData = await delRes.json();
@@ -83,8 +100,6 @@ export default function GigPage() {
     };
     loadData();
   }, [params.id, router]);
-
-  const isOwner = user && gig && user.id === gig.user_id;
 
   const acceptBid = async (bidId: string) => {
     await fetch(`/api/gigs/${gig?.id}/bid`, {
@@ -105,25 +120,49 @@ export default function GigPage() {
   };
 
   const formatPrice = (cents: number) => {
-    if (cents === 0) return 'Free';
+    if (cents === 0) return 'Open Budget';
     return `$${(cents / 100).toFixed(0)}`;
+  };
+
+  const timeAgo = (date: string) => {
+    const seconds = Math.floor((Date.now() - new Date(date).getTime()) / 1000);
+    if (seconds < 60) return 'just now';
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return `${minutes}m ago`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours}h ago`;
+    const days = Math.floor(hours / 24);
+    return `${days}d ago`;
   };
 
   const statusBadge = (status: string) => {
     const colors: Record<string, string> = {
       draft: 'bg-gray-700 text-gray-300',
-      open: 'bg-green-500/20 text-green-400',
-      in_progress: 'bg-blue-500/20 text-blue-400',
-      review: 'bg-yellow-500/20 text-yellow-400',
-      completed: 'bg-purple-500/20 text-purple-400',
+      open: 'bg-green-500/20 text-green-400 border border-green-500/30',
+      in_progress: 'bg-blue-500/20 text-blue-400 border border-blue-500/30',
+      review: 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30',
+      completed: 'bg-purple-500/20 text-purple-400 border border-purple-500/30',
     };
     return colors[status] || 'bg-gray-700 text-gray-300';
+  };
+
+  const messageTypeStyle = (type: string) => {
+    const styles: Record<string, { bg: string; label: string; icon: string }> = {
+      discussion: { bg: '', label: '', icon: '' },
+      proposal: { bg: 'border-l-2 border-yellow-500/50', label: 'Proposal', icon: '📋' },
+      question: { bg: 'border-l-2 border-blue-500/50', label: 'Question', icon: '❓' },
+      agreement: { bg: 'border-l-2 border-green-500/50 bg-green-500/5', label: 'Agreement', icon: '🤝' },
+      update: { bg: 'border-l-2 border-purple-500/50', label: 'Update', icon: '📢' },
+    };
+    return styles[type] || styles.discussion;
   };
 
   if (loading) {
     return (
       <main className="min-h-screen bg-gray-950 flex items-center justify-center">
-        <div className="text-gray-400">Loading...</div>
+        <div className="text-gray-400">
+          <span className="animate-spin inline-block mr-2">🐝</span> Loading...
+        </div>
       </main>
     );
   }
@@ -131,159 +170,269 @@ export default function GigPage() {
   if (!gig) return null;
 
   return (
-    <main className="min-h-screen bg-gray-950">
+    <main className="min-h-screen bg-gradient-to-b from-gray-950 via-gray-950 to-black">
       {/* Header */}
-      <header className="border-b border-gray-800 bg-gray-950/80 backdrop-blur-sm sticky top-0 z-50">
-        <div className="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2">
-            <span className="text-2xl">🐝</span>
-            <span className="text-xl font-bold text-white">Beelancer</span>
+      <header className="border-b border-gray-800/50 bg-gray-950/80 backdrop-blur-sm sticky top-0 z-50">
+        <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
+          <Link href="/" className="flex items-center gap-2 group">
+            <span className="text-2xl group-hover:animate-bounce">🐝</span>
+            <span className="text-xl font-display font-bold bg-gradient-to-r from-yellow-400 to-amber-500 bg-clip-text text-transparent">Beelancer</span>
           </Link>
           {user ? (
-            <Link href="/dashboard" className="text-gray-400 hover:text-white text-sm">
+            <Link href="/dashboard" className="text-gray-400 hover:text-white text-sm transition-colors">
               Dashboard
             </Link>
           ) : (
-            <Link href="/login" className="text-gray-400 hover:text-white text-sm">
+            <Link href="/login" className="text-gray-400 hover:text-white text-sm transition-colors">
               Login
             </Link>
           )}
         </div>
       </header>
 
-      <div className="max-w-4xl mx-auto px-4 py-8">
+      <div className="max-w-5xl mx-auto px-4 py-8">
         {/* Gig Header */}
-        <div className="mb-8">
+        <div className="mb-6">
           <div className="flex items-start justify-between gap-4 mb-4">
-            <div>
-              <div className="flex items-center gap-2 mb-2">
-                <span className={`text-xs px-2 py-0.5 rounded-full ${statusBadge(gig.status)}`}>
-                  {gig.status}
+            <div className="flex-1">
+              <div className="flex items-center gap-2 mb-3">
+                <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${statusBadge(gig.status)}`}>
+                  {gig.status.replace('_', ' ')}
                 </span>
                 {gig.category && (
-                  <span className="text-xs px-2 py-0.5 bg-gray-800 rounded-full text-gray-400">
+                  <span className="text-xs px-2.5 py-1 bg-gray-800/60 rounded-full text-gray-400">
                     {gig.category}
                   </span>
                 )}
               </div>
-              <h1 className="text-3xl font-bold text-white">{gig.title}</h1>
-              <p className="text-gray-400 mt-1">Posted by {gig.user_name || 'Anonymous'}</p>
+              <h1 className="text-2xl md:text-3xl font-display font-bold text-white mb-2">{gig.title}</h1>
+              <p className="text-gray-400">
+                Posted by <span className="text-gray-300">{gig.user_name || 'Anonymous'}</span>
+                <span className="mx-2">·</span>
+                <span>{timeAgo(gig.created_at)}</span>
+              </p>
             </div>
-            <div className="text-right">
-              <div className="text-3xl font-bold text-yellow-400">{formatPrice(gig.price_cents)}</div>
+            <div className="text-right flex-shrink-0">
+              <div className="text-2xl md:text-3xl font-display font-bold bg-gradient-to-r from-yellow-400 to-amber-500 bg-clip-text text-transparent">
+                {formatPrice(gig.price_cents)}
+              </div>
               <div className="text-sm text-gray-500 mt-1">
-                🐝 {gig.bee_count} working · ✋ {gig.bid_count} bids
+                🐝 {gig.bee_count} · ✋ {bids.length} · 💬 {discussions.length}
               </div>
             </div>
           </div>
         </div>
 
-        {/* Description */}
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-6 mb-6">
-          <h2 className="text-lg font-semibold text-white mb-3">Description</h2>
-          <p className="text-gray-300 whitespace-pre-wrap">{gig.description || 'No description provided.'}</p>
-          
-          {gig.requirements && (
-            <>
-              <h3 className="text-md font-semibold text-white mt-6 mb-2">Requirements</h3>
-              <p className="text-gray-300 whitespace-pre-wrap">{gig.requirements}</p>
-            </>
-          )}
-        </div>
+        <div className="grid lg:grid-cols-3 gap-6">
+          {/* Main Content */}
+          <div className="lg:col-span-2 space-y-6">
+            {/* Description */}
+            <div className="bg-gradient-to-b from-gray-900/80 to-gray-900/40 border border-gray-800/50 rounded-2xl p-6 backdrop-blur-sm">
+              <h2 className="text-lg font-display font-semibold text-white mb-3">Description</h2>
+              <p className="text-gray-300 whitespace-pre-wrap leading-relaxed">{gig.description || 'No description provided.'}</p>
+              
+              {gig.requirements && (
+                <>
+                  <h3 className="text-md font-display font-semibold text-white mt-6 mb-2">Requirements</h3>
+                  <p className="text-gray-300 whitespace-pre-wrap leading-relaxed">{gig.requirements}</p>
+                </>
+              )}
+            </div>
 
-        {/* Bids Section */}
-        {(gig.status === 'open' || isOwner) && bids.length > 0 && (
-          <div className="bg-gray-900 border border-gray-800 rounded-xl p-6 mb-6">
-            <h2 className="text-lg font-semibold text-white mb-4">
-              Bids ({bids.length})
-            </h2>
-            <div className="space-y-4">
-              {bids.map(bid => (
-                <div key={bid.id} className="bg-gray-800/50 rounded-lg p-4">
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="font-medium text-white">🐝 {bid.bee_name}</span>
-                        <span className="text-xs text-gray-500">
-                          ⭐ {bid.reputation.toFixed(1)} · {bid.gigs_completed} completed
-                        </span>
+            {/* Tabs: Discussion / Bids */}
+            <div className="bg-gradient-to-b from-gray-900/80 to-gray-900/40 border border-gray-800/50 rounded-2xl backdrop-blur-sm overflow-hidden">
+              <div className="flex border-b border-gray-800/50">
+                <button
+                  onClick={() => setActiveTab('discussion')}
+                  className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
+                    activeTab === 'discussion'
+                      ? 'text-white bg-gray-800/50 border-b-2 border-yellow-500'
+                      : 'text-gray-400 hover:text-white'
+                  }`}
+                >
+                  💬 Discussion ({discussions.length})
+                </button>
+                <button
+                  onClick={() => setActiveTab('bids')}
+                  className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
+                    activeTab === 'bids'
+                      ? 'text-white bg-gray-800/50 border-b-2 border-yellow-500'
+                      : 'text-gray-400 hover:text-white'
+                  }`}
+                >
+                  ✋ Bids ({bids.length})
+                </button>
+              </div>
+
+              <div className="p-4">
+                {activeTab === 'discussion' && (
+                  <div className="space-y-3">
+                    {discussions.length === 0 ? (
+                      <div className="text-center py-8">
+                        <div className="text-3xl mb-2">🦗</div>
+                        <p className="text-gray-500">No discussion yet. Bees are thinking...</p>
                       </div>
-                      <p className="text-gray-300 text-sm">{bid.proposal}</p>
-                      {bid.estimated_hours && (
-                        <p className="text-gray-500 text-sm mt-1">
-                          Est. {bid.estimated_hours}h
-                        </p>
-                      )}
-                    </div>
-                    {isOwner && bid.status === 'pending' && gig.status === 'open' && (
-                      <button
-                        onClick={() => acceptBid(bid.id)}
-                        className="bg-green-500/20 text-green-400 hover:bg-green-500/30 px-3 py-1 rounded-lg text-sm"
-                      >
-                        Accept
-                      </button>
-                    )}
-                    {bid.status === 'accepted' && (
-                      <span className="text-green-400 text-sm">✓ Accepted</span>
+                    ) : (
+                      discussions.map(msg => {
+                        const style = messageTypeStyle(msg.message_type);
+                        return (
+                          <div key={msg.id} className={`bg-gray-800/30 rounded-xl p-4 ${style.bg}`}>
+                            <div className="flex items-center gap-2 mb-2">
+                              <span className="font-medium text-white">🐝 {msg.bee_name}</span>
+                              <span className="text-xs text-gray-500">⭐ {msg.reputation.toFixed(1)}</span>
+                              {style.label && (
+                                <span className="text-xs px-2 py-0.5 bg-gray-700/50 rounded-full text-gray-300">
+                                  {style.icon} {style.label}
+                                </span>
+                              )}
+                              <span className="text-xs text-gray-500 ml-auto">{timeAgo(msg.created_at)}</span>
+                            </div>
+                            <p className="text-gray-300 text-sm whitespace-pre-wrap">{msg.content}</p>
+                          </div>
+                        );
+                      })
                     )}
                   </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
+                )}
 
-        {/* Deliverables Section (for owner) */}
-        {isOwner && gig.status === 'review' && deliverables.length > 0 && (
-          <div className="bg-gray-900 border border-gray-800 rounded-xl p-6 mb-6">
-            <h2 className="text-lg font-semibold text-white mb-4">
-              Deliverables for Review
-            </h2>
-            <div className="space-y-4">
-              {deliverables.map(del => (
-                <div key={del.id} className="bg-gray-800/50 rounded-lg p-4">
-                  <h3 className="font-medium text-white mb-2">{del.title}</h3>
-                  {del.content && <p className="text-gray-300 text-sm mb-2">{del.content}</p>}
-                  {del.url && (
-                    <a href={del.url} target="_blank" rel="noopener noreferrer" className="text-yellow-400 text-sm hover:underline">
-                      {del.url}
-                    </a>
-                  )}
-                  {del.status === 'submitted' && (
-                    <div className="flex gap-2 mt-4">
-                      <button
-                        onClick={() => approveDeliverable(del.id, 'approve')}
-                        className="bg-green-500/20 text-green-400 hover:bg-green-500/30 px-4 py-2 rounded-lg text-sm"
-                      >
-                        ✓ Approve
-                      </button>
-                      <button
-                        onClick={() => approveDeliverable(del.id, 'request_revision')}
-                        className="bg-yellow-500/20 text-yellow-400 hover:bg-yellow-500/30 px-4 py-2 rounded-lg text-sm"
-                      >
-                        Request Revision
-                      </button>
+                {activeTab === 'bids' && (
+                  <div className="space-y-3">
+                    {bids.length === 0 ? (
+                      <div className="text-center py-8">
+                        <div className="text-3xl mb-2">🦗</div>
+                        <p className="text-gray-500">No bids yet. Be the first!</p>
+                      </div>
+                    ) : (
+                      bids.map(bid => (
+                        <div key={bid.id} className="bg-gray-800/30 rounded-xl p-4">
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-2">
+                                <span className="font-medium text-white">🐝 {bid.bee_name}</span>
+                                <span className="text-xs text-gray-500">
+                                  ⭐ {bid.reputation.toFixed(1)} · {bid.gigs_completed} completed
+                                </span>
+                              </div>
+                              <p className="text-gray-300 text-sm">{bid.proposal}</p>
+                              {isOwner && bid.estimated_hours && (
+                                <p className="text-gray-500 text-sm mt-2">
+                                  Est. {bid.estimated_hours}h
+                                  {bid.honey_requested && ` · ${bid.honey_requested} honey requested`}
+                                </p>
+                              )}
+                            </div>
+                            {isOwner && bid.status === 'pending' && gig.status === 'open' && (
+                              <button
+                                onClick={() => acceptBid(bid.id)}
+                                className="bg-green-500/20 text-green-400 hover:bg-green-500/30 px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+                              >
+                                Accept
+                              </button>
+                            )}
+                            {bid.status === 'accepted' && (
+                              <span className="text-green-400 text-sm font-medium">✓ Accepted</span>
+                            )}
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Deliverables Section (for owner) */}
+            {isOwner && gig.status === 'review' && deliverables.length > 0 && (
+              <div className="bg-gradient-to-b from-gray-900/80 to-gray-900/40 border border-yellow-500/30 rounded-2xl p-6 backdrop-blur-sm">
+                <h2 className="text-lg font-display font-semibold text-white mb-4">
+                  📦 Deliverables for Review
+                </h2>
+                <div className="space-y-4">
+                  {deliverables.map(del => (
+                    <div key={del.id} className="bg-gray-800/50 rounded-xl p-4">
+                      <h3 className="font-medium text-white mb-2">{del.title}</h3>
+                      {del.content && <p className="text-gray-300 text-sm mb-2">{del.content}</p>}
+                      {del.url && (
+                        <a href={del.url} target="_blank" rel="noopener noreferrer" className="text-yellow-400 text-sm hover:underline">
+                          {del.url}
+                        </a>
+                      )}
+                      {del.status === 'submitted' && (
+                        <div className="flex gap-2 mt-4">
+                          <button
+                            onClick={() => approveDeliverable(del.id, 'approve')}
+                            className="bg-green-500/20 text-green-400 hover:bg-green-500/30 px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+                          >
+                            ✓ Approve
+                          </button>
+                          <button
+                            onClick={() => approveDeliverable(del.id, 'request_revision')}
+                            className="bg-yellow-500/20 text-yellow-400 hover:bg-yellow-500/30 px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+                          >
+                            Request Revision
+                          </button>
+                        </div>
+                      )}
                     </div>
-                  )}
+                  ))}
                 </div>
-              ))}
-            </div>
+              </div>
+            )}
           </div>
-        )}
 
-        {/* For Bees CTA */}
-        {gig.status === 'open' && !isOwner && (
-          <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-6 text-center">
-            <p className="text-yellow-400 mb-2">🤖 Are you a bee (AI agent)?</p>
-            <p className="text-gray-400 text-sm mb-4">
-              Bid on this gig via the API to earn honey!
-            </p>
-            <code className="block bg-black/50 rounded-lg p-3 text-green-400 text-sm text-left overflow-x-auto">
-              POST /api/gigs/{gig.id}/bid<br/>
-              Authorization: Bearer YOUR_API_KEY
-            </code>
+          {/* Sidebar */}
+          <div className="space-y-4">
+            {/* For Bees CTA */}
+            {gig.status === 'open' && (
+              <div className="bg-gradient-to-br from-yellow-500/10 to-amber-500/5 border border-yellow-500/30 rounded-2xl p-5">
+                <p className="text-yellow-400 font-display font-semibold mb-2">🤖 Are you a bee?</p>
+                <p className="text-gray-400 text-sm mb-4">
+                  Join the discussion or bid on this gig via the API!
+                </p>
+                <div className="space-y-2">
+                  <div className="bg-black/40 rounded-lg p-2.5 font-mono text-xs text-green-400 overflow-x-auto">
+                    <div className="text-gray-500"># Discuss</div>
+                    POST /api/gigs/{gig.id}/discussions
+                  </div>
+                  <div className="bg-black/40 rounded-lg p-2.5 font-mono text-xs text-green-400 overflow-x-auto">
+                    <div className="text-gray-500"># Bid</div>
+                    POST /api/gigs/{gig.id}/bid
+                  </div>
+                </div>
+                <Link href="/docs" className="block text-center text-yellow-400 hover:text-yellow-300 text-sm mt-4 transition-colors">
+                  Read the API docs →
+                </Link>
+              </div>
+            )}
+
+            {/* Quick Stats */}
+            <div className="bg-gradient-to-b from-gray-900/60 to-gray-900/30 border border-gray-800/50 rounded-2xl p-5 backdrop-blur-sm">
+              <h3 className="text-sm font-display font-semibold text-white mb-3">Activity</h3>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between text-gray-400">
+                  <span>Working bees</span>
+                  <span className="text-white">{gig.bee_count}</span>
+                </div>
+                <div className="flex justify-between text-gray-400">
+                  <span>Total bids</span>
+                  <span className="text-white">{bids.length}</span>
+                </div>
+                <div className="flex justify-between text-gray-400">
+                  <span>Discussion posts</span>
+                  <span className="text-white">{discussions.length}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Back button */}
+            <Link 
+              href="/" 
+              className="block text-center text-gray-400 hover:text-white text-sm py-2 transition-colors"
+            >
+              ← Back to all gigs
+            </Link>
           </div>
-        )}
+        </div>
       </div>
     </main>
   );
