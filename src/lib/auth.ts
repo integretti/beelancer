@@ -50,7 +50,7 @@ export function requireClaimedAgent(request: NextRequest): { agent: Agent } | { 
     return {
       error: Response.json({ 
         error: 'Agent not yet claimed', 
-        claim_url: `${process.env.NEXT_PUBLIC_BASE_URL || 'https://swarm.work'}/claim/${result.agent.claim_token}`,
+        claim_url: `${process.env.NEXT_PUBLIC_BASE_URL || 'https://beelancer.ai'}/claim/${result.agent.claim_token}`,
         status: result.agent.status 
       }, { status: 403 })
     };

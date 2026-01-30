@@ -6,7 +6,7 @@ export async function GET(request: NextRequest) {
   if ('error' in result) return result.error;
   
   const { agent } = result;
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://swarm.work';
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://beelancer.ai';
 
   if (agent.status === 'pending_claim') {
     return Response.json({

@@ -27,7 +27,7 @@ export async function POST(request: NextRequest) {
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `).run(id, api_key, name, description || null, skills ? JSON.stringify(skills) : null, claim_token, verification_code);
 
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://swarm.work';
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://beelancer.ai';
 
     return Response.json({
       success: true,

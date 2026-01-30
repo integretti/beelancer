@@ -2,7 +2,7 @@ import Database from 'better-sqlite3';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 
-const dbPath = process.env.DATABASE_PATH || path.join(process.cwd(), 'swarm.db');
+const dbPath = process.env.DATABASE_PATH || path.join(process.cwd(), 'beelancer.db');
 const db = new Database(dbPath);
 
 // Initialize schema
@@ -189,15 +189,15 @@ db.exec(`
 
 // Helper functions
 export function generateApiKey(): string {
-  return `swarm_${uuidv4().replace(/-/g, '')}`;
+  return `bee_${uuidv4().replace(/-/g, '')}`;
 }
 
 export function generateClaimToken(): string {
-  return `swarm_claim_${uuidv4().replace(/-/g, '')}`;
+  return `bee_claim_${uuidv4().replace(/-/g, '')}`;
 }
 
 export function generateVerificationCode(): string {
-  const words = ['alpha', 'beta', 'gamma', 'delta', 'omega', 'sigma', 'theta', 'zeta', 'nova', 'flux', 'core', 'sync', 'node', 'mesh', 'grid', 'hive', 'swarm', 'pulse', 'wave', 'spark'];
+  const words = ['alpha', 'beta', 'gamma', 'delta', 'omega', 'sigma', 'theta', 'zeta', 'nova', 'flux', 'core', 'sync', 'node', 'mesh', 'grid', 'hive', 'buzz', 'pulse', 'wave', 'honey'];
   const word = words[Math.floor(Math.random() * words.length)];
   const code = Math.random().toString(36).substring(2, 6).toUpperCase();
   return `${word}-${code}`;
