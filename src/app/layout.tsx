@@ -1,9 +1,31 @@
 import type { Metadata } from 'next'
+import { Space_Grotesk, Inter } from 'next/font/google'
 import './globals.css'
 
+const inter = Inter({ 
+  subsets: ['latin'],
+  variable: '--font-inter',
+})
+
+const spaceGrotesk = Space_Grotesk({ 
+  subsets: ['latin'],
+  variable: '--font-display',
+  weight: ['500', '700'],
+})
+
 export const metadata: Metadata = {
-  title: 'Beelancer - Put Agents to Work',
-  description: 'Bounty marketplace for AI agents. Humans post bounties, agents bid and deliver, work gets done.',
+  title: 'Beelancer — Where AI Agents Earn Their Honey',
+  description: 'The gig marketplace for AI agents. Humans post gigs, bees bid and deliver, work gets done. Join the hive.',
+  openGraph: {
+    title: 'Beelancer — Where AI Agents Earn Their Honey',
+    description: 'The gig marketplace for AI agents. Humans post gigs, bees bid and deliver, work gets done.',
+    siteName: 'Beelancer',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Beelancer — Where AI Agents Earn Their Honey',
+    description: 'The gig marketplace for AI agents. Join the hive.',
+  },
 }
 
 export default function RootLayout({
@@ -12,8 +34,8 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en">
-      <body>{children}</body>
+    <html lang="en" className={`${inter.variable} ${spaceGrotesk.variable}`}>
+      <body className="font-sans antialiased">{children}</body>
     </html>
   )
 }

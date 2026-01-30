@@ -40,24 +40,24 @@ export default function VerifyPage() {
 
   if (success) {
     return (
-      <main className="min-h-screen bg-gray-950 flex items-center justify-center p-4">
+      <main className="min-h-screen bg-gradient-to-b from-gray-950 via-gray-950 to-black flex items-center justify-center p-4">
         <div className="w-full max-w-md">
           <div className="text-center mb-8">
-            <Link href="/" className="inline-flex items-center gap-2">
-              <span className="text-3xl">🐝</span>
-              <span className="text-2xl font-bold text-white">Beelancer</span>
+            <Link href="/" className="inline-flex items-center gap-2 group">
+              <span className="text-3xl group-hover:animate-bounce">🐝</span>
+              <span className="text-2xl font-display font-bold bg-gradient-to-r from-yellow-400 to-amber-500 bg-clip-text text-transparent">Beelancer</span>
             </Link>
           </div>
 
-          <div className="bg-gray-900 border border-gray-800 rounded-2xl p-8 text-center">
-            <div className="text-4xl mb-4">✅</div>
-            <h1 className="text-xl font-semibold text-white mb-2">Email verified!</h1>
-            <p className="text-gray-400 mb-6">Your account is ready. You can now log in.</p>
+          <div className="bg-gradient-to-b from-gray-900/80 to-gray-900/40 border border-gray-800/50 rounded-2xl p-8 text-center backdrop-blur-sm">
+            <div className="text-5xl mb-4">🎉</div>
+            <h1 className="text-xl font-display font-semibold text-white mb-2">You're in the hive!</h1>
+            <p className="text-gray-400 mb-6">Your email is verified and your account is ready to buzz.</p>
             <Link 
               href="/login" 
-              className="inline-block bg-yellow-500 hover:bg-yellow-400 text-black px-6 py-3 rounded-lg font-medium"
+              className="inline-block bg-gradient-to-r from-yellow-500 to-amber-500 hover:from-yellow-400 hover:to-amber-400 text-black px-6 py-3 rounded-xl font-semibold transition-all hover:shadow-lg hover:shadow-yellow-500/20"
             >
-              Log in
+              Log in and start buzzing →
             </Link>
           </div>
         </div>
@@ -66,19 +66,19 @@ export default function VerifyPage() {
   }
 
   return (
-    <main className="min-h-screen bg-gray-950 flex items-center justify-center p-4">
+    <main className="min-h-screen bg-gradient-to-b from-gray-950 via-gray-950 to-black flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <Link href="/" className="inline-flex items-center gap-2">
-            <span className="text-3xl">🐝</span>
-            <span className="text-2xl font-bold text-white">Beelancer</span>
+          <Link href="/" className="inline-flex items-center gap-2 group">
+            <span className="text-3xl group-hover:animate-bounce">🐝</span>
+            <span className="text-2xl font-display font-bold bg-gradient-to-r from-yellow-400 to-amber-500 bg-clip-text text-transparent">Beelancer</span>
           </Link>
         </div>
 
-        <div className="bg-gray-900 border border-gray-800 rounded-2xl p-8">
-          <h1 className="text-xl font-semibold text-white mb-2">Verify your email</h1>
+        <div className="bg-gradient-to-b from-gray-900/80 to-gray-900/40 border border-gray-800/50 rounded-2xl p-8 backdrop-blur-sm">
+          <h1 className="text-xl font-display font-semibold text-white mb-2">Enter your code</h1>
           <p className="text-gray-400 mb-6 text-sm">
-            Enter the verification code we sent to your email.
+            Pop in the verification code from your email to join the hive.
           </p>
 
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -87,15 +87,15 @@ export default function VerifyPage() {
                 type="text"
                 value={code}
                 onChange={(e) => setCode(e.target.value.toUpperCase())}
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white text-center text-2xl font-mono tracking-widest focus:outline-none focus:border-yellow-500"
-                placeholder="CODE"
+                className="w-full bg-gradient-to-r from-gray-800/60 to-gray-800/40 border-2 border-yellow-500/30 rounded-xl px-4 py-4 text-white text-center text-2xl font-display font-bold tracking-[0.3em] focus:outline-none focus:border-yellow-500/60 transition-colors placeholder:text-gray-600 placeholder:tracking-normal placeholder:text-base placeholder:font-normal"
+                placeholder="ENTER CODE"
                 required
                 maxLength={10}
               />
             </div>
 
             {error && (
-              <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 text-red-400 text-sm">
+              <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-3 text-red-400 text-sm">
                 {error}
               </div>
             )}
@@ -103,11 +103,19 @@ export default function VerifyPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-yellow-500 hover:bg-yellow-400 disabled:opacity-50 text-black font-medium py-3 rounded-lg"
+              className="w-full bg-gradient-to-r from-yellow-500 to-amber-500 hover:from-yellow-400 hover:to-amber-400 disabled:opacity-50 disabled:cursor-not-allowed text-black font-semibold py-3 rounded-xl transition-all hover:shadow-lg hover:shadow-yellow-500/20"
             >
-              {loading ? 'Verifying...' : 'Verify'}
+              {loading ? (
+                <span className="inline-flex items-center gap-2">
+                  <span className="animate-spin">🐝</span> Verifying...
+                </span>
+              ) : 'Verify my account'}
             </button>
           </form>
+
+          <p className="mt-6 text-center text-sm text-gray-500">
+            Didn't receive it? Check your spam folder.
+          </p>
         </div>
       </div>
     </main>

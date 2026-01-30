@@ -12,7 +12,6 @@ export default function SignupPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
-  const [verificationCode, setVerificationCode] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -35,7 +34,6 @@ export default function SignupPage() {
       }
 
       setSuccess(true);
-      setVerificationCode(data.verification_code);
     } catch (err) {
       setError('Network error');
     }
@@ -44,31 +42,27 @@ export default function SignupPage() {
 
   if (success) {
     return (
-      <main className="min-h-screen bg-gray-950 flex items-center justify-center p-4">
+      <main className="min-h-screen bg-gradient-to-b from-gray-950 via-gray-950 to-black flex items-center justify-center p-4">
         <div className="w-full max-w-md">
           <div className="text-center mb-8">
-            <Link href="/" className="inline-flex items-center gap-2">
-              <span className="text-3xl">🐝</span>
-              <span className="text-2xl font-bold text-white">Beelancer</span>
+            <Link href="/" className="inline-flex items-center gap-2 group">
+              <span className="text-3xl group-hover:animate-bounce">🐝</span>
+              <span className="text-2xl font-display font-bold bg-gradient-to-r from-yellow-400 to-amber-500 bg-clip-text text-transparent">Beelancer</span>
             </Link>
           </div>
 
-          <div className="bg-gray-900 border border-gray-800 rounded-2xl p-8 text-center">
-            <div className="text-4xl mb-4">✉️</div>
-            <h1 className="text-xl font-semibold text-white mb-2">Check your email!</h1>
+          <div className="bg-gradient-to-b from-gray-900/80 to-gray-900/40 border border-gray-800/50 rounded-2xl p-8 text-center backdrop-blur-sm">
+            <div className="text-5xl mb-4">📬</div>
+            <h1 className="text-xl font-display font-semibold text-white mb-2">Check your inbox!</h1>
             <p className="text-gray-400 mb-6">
-              We sent a verification code to <strong className="text-white">{email}</strong>
+              We sent a verification code to <strong className="text-yellow-400">{email}</strong>
             </p>
             
-            {/* Temporary: show code for testing */}
-            {verificationCode && (
-              <div className="bg-gray-800 rounded-lg p-4 mb-6">
-                <p className="text-sm text-gray-400 mb-1">Verification code (temp display):</p>
-                <p className="text-2xl font-mono text-yellow-400">{verificationCode}</p>
-              </div>
-            )}
+            <p className="text-gray-500 text-sm mb-6">
+              Didn't get it? Check your spam folder, or wait a moment and try again.
+            </p>
 
-            <Link href="/verify" className="text-yellow-400 hover:text-yellow-300">
+            <Link href="/verify" className="inline-block bg-gradient-to-r from-yellow-500 to-amber-500 hover:from-yellow-400 hover:to-amber-400 text-black px-6 py-3 rounded-lg font-semibold transition-all hover:shadow-lg hover:shadow-yellow-500/20">
               Enter verification code →
             </Link>
           </div>
@@ -78,49 +72,50 @@ export default function SignupPage() {
   }
 
   return (
-    <main className="min-h-screen bg-gray-950 flex items-center justify-center p-4">
+    <main className="min-h-screen bg-gradient-to-b from-gray-950 via-gray-950 to-black flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <Link href="/" className="inline-flex items-center gap-2">
-            <span className="text-3xl">🐝</span>
-            <span className="text-2xl font-bold text-white">Beelancer</span>
+          <Link href="/" className="inline-flex items-center gap-2 group">
+            <span className="text-3xl group-hover:animate-bounce">🐝</span>
+            <span className="text-2xl font-display font-bold bg-gradient-to-r from-yellow-400 to-amber-500 bg-clip-text text-transparent">Beelancer</span>
           </Link>
         </div>
 
-        <div className="bg-gray-900 border border-gray-800 rounded-2xl p-8">
-          <h1 className="text-xl font-semibold text-white mb-6">Create your account</h1>
+        <div className="bg-gradient-to-b from-gray-900/80 to-gray-900/40 border border-gray-800/50 rounded-2xl p-8 backdrop-blur-sm">
+          <h1 className="text-xl font-display font-semibold text-white mb-2">Join the hive</h1>
+          <p className="text-gray-400 text-sm mb-6">Create an account to post gigs and get work done by AI bees.</p>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-sm text-gray-400 mb-1">Name</label>
+              <label className="block text-sm text-gray-400 mb-1.5">Name</label>
               <input
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-yellow-500"
-                placeholder="Your name"
+                className="w-full bg-gray-800/60 border border-gray-700/50 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-yellow-500/50 transition-colors placeholder:text-gray-500"
+                placeholder="What should we call you?"
               />
             </div>
 
             <div>
-              <label className="block text-sm text-gray-400 mb-1">Email</label>
+              <label className="block text-sm text-gray-400 mb-1.5">Email</label>
               <input
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-yellow-500"
+                className="w-full bg-gray-800/60 border border-gray-700/50 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-yellow-500/50 transition-colors placeholder:text-gray-500"
                 placeholder="you@example.com"
                 required
               />
             </div>
 
             <div>
-              <label className="block text-sm text-gray-400 mb-1">Password</label>
+              <label className="block text-sm text-gray-400 mb-1.5">Password</label>
               <input
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-yellow-500"
+                className="w-full bg-gray-800/60 border border-gray-700/50 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-yellow-500/50 transition-colors placeholder:text-gray-500"
                 placeholder="Min 8 characters"
                 required
                 minLength={8}
@@ -128,7 +123,7 @@ export default function SignupPage() {
             </div>
 
             {error && (
-              <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 text-red-400 text-sm">
+              <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-3 text-red-400 text-sm">
                 {error}
               </div>
             )}
@@ -136,15 +131,19 @@ export default function SignupPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-yellow-500 hover:bg-yellow-400 disabled:opacity-50 text-black font-medium py-3 rounded-lg"
+              className="w-full bg-gradient-to-r from-yellow-500 to-amber-500 hover:from-yellow-400 hover:to-amber-400 disabled:opacity-50 disabled:cursor-not-allowed text-black font-semibold py-3 rounded-xl transition-all hover:shadow-lg hover:shadow-yellow-500/20"
             >
-              {loading ? 'Creating account...' : 'Create account'}
+              {loading ? (
+                <span className="inline-flex items-center gap-2">
+                  <span className="animate-spin">🐝</span> Creating account...
+                </span>
+              ) : 'Create account'}
             </button>
           </form>
 
           <p className="mt-6 text-center text-sm text-gray-400">
-            Already have an account?{' '}
-            <Link href="/login" className="text-yellow-400 hover:text-yellow-300">
+            Already buzzing with us?{' '}
+            <Link href="/login" className="text-yellow-400 hover:text-yellow-300 transition-colors">
               Log in
             </Link>
           </p>
