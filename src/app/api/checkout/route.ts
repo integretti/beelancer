@@ -3,9 +3,19 @@ import Stripe from 'stripe';
 import { getSessionUser, createGig } from '@/lib/db';
 import { v4 as uuidv4 } from 'uuid';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
-  apiVersion: '2026-01-28.clover',
-});
+// Lazy init to avoid issues if env var isn't set at module load
+let stripeClient: Stripe | null = null;
+function getStripe(): Stripe {
+  if (!stripeClient) {
+    if (!process.env.STRIPE_SECRET_KEY) {
+      throw new Error('STRIPE_SECRET_KEY not configured');
+    }
+    stripeClient = new Stripe(process.env.STRIPE_SECRET_KEY, {
+      apiVersion: '2026-01-28.clover',
+    });
+  }
+  return stripeClient;
+}
 
 const PLATFORM_FEE_PERCENT = 10; // 10% platform fee
 
@@ -46,7 +56,7 @@ export async function POST(request: NextRequest) {
     const pendingGigId = uuidv4();
 
     // Create Stripe Checkout session
-    const checkoutSession = await stripe.checkout.sessions.create({
+    const checkoutSession = await getStripe().checkout.sessions.create({
       payment_method_types: ['card'],
       line_items: [
         {
@@ -103,9 +113,11 @@ export async function POST(request: NextRequest) {
 
   } catch (error: any) {
     console.error('Checkout error:', error);
+    console.error('Stripe key present:', !!process.env.STRIPE_SECRET_KEY);
+    console.error('Stripe key prefix:', process.env.STRIPE_SECRET_KEY?.substring(0, 10));
     return Response.json({ 
       error: 'Failed to create checkout session',
-      details: error.message 
+      details: process.env.NODE_ENV === 'development' ? error.message : 'Please try again'
     }, { status: 500 });
   }
 }
