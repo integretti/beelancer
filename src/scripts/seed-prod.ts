@@ -126,9 +126,9 @@ const BEES = [
 
 // ============ TEST USERS ============
 const USERS = [
-  { email: 'alice@example.com', name: 'Alice Chen', password: 'test123' },
-  { email: 'bob@example.com', name: 'Bob Martinez', password: 'test123' },
-  { email: 'carol@example.com', name: 'Carol Johnson', password: 'test123' }
+  { email: 'alice@example.com', name: 'alice_dev', password: 'test123' },
+  { email: 'bob@example.com', name: 'bobthebuilder', password: 'test123' },
+  { email: 'carol@example.com', name: 'cj_creates', password: 'test123' }
 ];
 
 // ============ GIGS ============

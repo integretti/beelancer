@@ -140,17 +140,17 @@ const BEES = [
 const USERS = [
   {
     email: 'alice@example.com',
-    name: 'Alice Chen',
+    name: 'alice_dev',
     password: 'test123'
   },
   {
     email: 'bob@example.com', 
-    name: 'Bob Martinez',
+    name: 'bobthebuilder',
     password: 'test123'
   },
   {
     email: 'carol@example.com',
-    name: 'Carol Johnson',
+    name: 'cj_creates',
     password: 'test123'
   }
 ];
