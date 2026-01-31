@@ -3,6 +3,7 @@
 import { useEffect, useState, Suspense } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { CATEGORIES, parseCategories, getCategoryIcon } from '@/lib/categories';
 
 interface User {
   id: string;
@@ -17,7 +18,8 @@ interface Gig {
   requirements: string;
   price_cents: number;
   status: string;
-  category: string;
+  category: string; // Legacy single category (JSON array stored as string)
+  categories?: string[]; // Parsed array
   bee_count: number;
   bid_count: number;
   discussion_count: number;
@@ -35,7 +37,7 @@ function DashboardContent() {
   const [loading, setLoading] = useState(true);
   const [showNewGig, setShowNewGig] = useState(false);
   const [editingGig, setEditingGig] = useState<Gig | null>(null);
-  const [gigForm, setGigForm] = useState({ title: '', description: '', requirements: '', price_cents: 0, category: '' });
+  const [gigForm, setGigForm] = useState({ title: '', description: '', requirements: '', price_cents: 0, categories: [] as string[] });
   const [saving, setSaving] = useState(false);
   const [paymentMessage, setPaymentMessage] = useState<{ type: 'success' | 'cancelled' | null; text: string }>({ type: null, text: '' });
   const [activeTab, setActiveTab] = useState<'gigs' | 'payments'>('gigs');
@@ -88,9 +90,18 @@ function DashboardContent() {
   };
 
   const resetForm = () => {
-    setGigForm({ title: '', description: '', requirements: '', price_cents: 0, category: '' });
+    setGigForm({ title: '', description: '', requirements: '', price_cents: 0, categories: [] });
     setEditingGig(null);
     setShowNewGig(false);
+  };
+
+  const toggleCategory = (catId: string) => {
+    setGigForm(prev => ({
+      ...prev,
+      categories: prev.categories.includes(catId)
+        ? prev.categories.filter(c => c !== catId)
+        : [...prev.categories, catId]
+    }));
   };
 
   const handleSubmitGig = async (e: React.FormEvent, asDraft: boolean = false) => {
@@ -121,6 +132,7 @@ function DashboardContent() {
     // Free gigs or drafts - use direct API
     const payload = {
       ...gigForm,
+      category: JSON.stringify(gigForm.categories), // Store as JSON array
       status: asDraft ? 'draft' : 'open',
     };
 
@@ -152,7 +164,7 @@ function DashboardContent() {
       description: gig.description || '',
       requirements: gig.requirements || '',
       price_cents: gig.price_cents,
-      category: gig.category || '',
+      categories: parseCategories(gig.category),
     });
     setEditingGig(gig);
     setShowNewGig(true);
@@ -170,7 +182,7 @@ function DashboardContent() {
           description: gig.description,
           requirements: gig.requirements,
           price_cents: gig.price_cents,
-          category: gig.category,
+          category: gig.category, // Keep sending as-is for checkout
         }),
       });
       const data = await res.json();
@@ -324,22 +336,26 @@ function DashboardContent() {
               <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-3 mb-4">
                 <p className="text-yellow-400 text-sm">🐝 <strong>Beta:</strong> All gigs are free during the beta period. Payments coming soon!</p>
               </div>
-              <div className="grid grid-cols-1 gap-4">
-                <div>
-                  <label className="block text-sm text-gray-400 mb-1.5">Category</label>
-                  <select
-                    value={gigForm.category}
-                    onChange={(e) => setGigForm({ ...gigForm, category: e.target.value })}
-                    className="w-full bg-gray-800/60 border border-gray-700/50 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-yellow-500/50 transition-colors"
-                  >
-                    <option value="">Select category</option>
-                    <option value="Development">Development</option>
-                    <option value="Design">Design</option>
-                    <option value="Writing">Writing</option>
-                    <option value="Research">Research</option>
-                    <option value="Data">Data & Analysis</option>
-                    <option value="Other">Other</option>
-                  </select>
+              <div>
+                <label className="block text-sm text-gray-400 mb-2">Categories <span className="text-gray-500">(select all that apply)</span></label>
+                <div className="flex flex-wrap gap-2">
+                  {CATEGORIES.map(cat => (
+                    <button
+                      key={cat.id}
+                      type="button"
+                      onClick={() => toggleCategory(cat.id)}
+                      className={`
+                        px-3 py-1.5 rounded-full text-sm font-medium transition-all
+                        ${gigForm.categories.includes(cat.id)
+                          ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/40 shadow-sm shadow-yellow-500/10'
+                          : 'bg-gray-800/60 text-gray-400 border border-gray-700/50 hover:border-gray-600 hover:text-gray-300'
+                        }
+                      `}
+                    >
+                      <span className="mr-1">{cat.icon}</span>
+                      {cat.label}
+                    </button>
+                  ))}
                 </div>
               </div>
 

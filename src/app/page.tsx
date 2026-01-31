@@ -5,6 +5,7 @@ import Link from 'next/link';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import BeeSwarm from '@/components/BeeSwarm';
+import { CATEGORIES, parseCategories, getCategoryIcon } from '@/lib/categories';
 
 interface Gig {
   id: string;
@@ -12,7 +13,7 @@ interface Gig {
   description: string;
   price_cents: number;
   status: string;
-  category: string;
+  category: string; // JSON array stored as string
   user_name: string;
   creator_type?: 'human' | 'bee';
   bee_count: number;
@@ -46,22 +47,6 @@ export default function Home() {
     });
   }, []);
 
-  // Categories available
-  const CATEGORIES = [
-    { id: 'backend', label: 'Backend', icon: '⚙️' },
-    { id: 'frontend', label: 'Frontend', icon: '🎨' },
-    { id: 'fullstack', label: 'Full Stack', icon: '🔧' },
-    { id: 'mobile', label: 'Mobile', icon: '📱' },
-    { id: 'design', label: 'Design', icon: '✨' },
-    { id: 'writing', label: 'Writing', icon: '✍️' },
-    { id: 'data', label: 'Data', icon: '📊' },
-    { id: 'ml', label: 'ML/AI', icon: '🤖' },
-    { id: 'devops', label: 'DevOps', icon: '☁️' },
-    { id: 'security', label: 'Security', icon: '🔒' },
-    { id: 'research', label: 'Research', icon: '🔍' },
-    { id: 'automation', label: 'Automation', icon: '⚡' },
-  ];
-
   const toggleCategory = (cat: string) => {
     setSelectedCategories(prev => 
       prev.includes(cat) 
@@ -70,11 +55,14 @@ export default function Home() {
     );
   };
 
-  // Filter gigs by selected categories (OR logic - match any)
+  // Filter gigs by selected categories (OR logic - match any selected category)
   const filteredGigs = selectedCategories.length > 0
-    ? gigs.filter(gig => selectedCategories.some(cat => 
-        gig.category?.toLowerCase() === cat.toLowerCase()
-      ))
+    ? gigs.filter(gig => {
+        const gigCats = parseCategories(gig.category);
+        return selectedCategories.some(selected => 
+          gigCats.some(gc => gc.toLowerCase() === selected.toLowerCase())
+        );
+      })
     : gigs;
 
   const formatPrice = (cents: number) => {
@@ -259,13 +247,13 @@ export default function Home() {
               >
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
+                    <div className="flex items-center gap-2 mb-1 flex-wrap">
                       <h3 className="text-lg font-semibold text-white truncate group-hover:text-yellow-400 transition-colors">{gig.title}</h3>
-                      {gig.category && (
-                        <span className="text-xs px-2 py-0.5 bg-gray-800/80 rounded-full text-gray-400 flex-shrink-0">
-                          {gig.category}
+                      {parseCategories(gig.category).map((cat, i) => (
+                        <span key={i} className="text-xs px-2 py-0.5 bg-gray-800/80 rounded-full text-gray-400 flex-shrink-0">
+                          {getCategoryIcon(cat)} {CATEGORIES.find(c => c.id === cat)?.label || cat}
                         </span>
-                      )}
+                      ))}
                     </div>
                     <p className="text-gray-400 text-sm line-clamp-1">{gig.description}</p>
                     <div className="flex items-center gap-4 mt-1 text-xs text-gray-500">
