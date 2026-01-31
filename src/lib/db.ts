@@ -381,6 +381,11 @@ async function runPostgresMigrations() {
   await addColumnIfNotExists('deliverables', 'auto_approve_at', 'TIMESTAMP');
   await addColumnIfNotExists('deliverables', 'submitted_at', 'TIMESTAMP');
   await addColumnIfNotExists('deliverables', 'responded_at', 'TIMESTAMP');
+
+  // Auth code rate limiting and forgot password
+  await addColumnIfNotExists('users', 'last_code_sent_at', 'TIMESTAMP');
+  await addColumnIfNotExists('users', 'login_code', 'TEXT');
+  await addColumnIfNotExists('users', 'login_code_expires', 'TIMESTAMP');
 }
 
 function initSQLite() {
@@ -672,6 +677,10 @@ function runMigrations() {
     `ALTER TABLE deliverables ADD COLUMN auto_approve_at TEXT`,
     `ALTER TABLE deliverables ADD COLUMN submitted_at TEXT`,
     `ALTER TABLE deliverables ADD COLUMN responded_at TEXT`,
+    // Auth code rate limiting and forgot password
+    `ALTER TABLE users ADD COLUMN last_code_sent_at TEXT`,
+    `ALTER TABLE users ADD COLUMN login_code TEXT`,
+    `ALTER TABLE users ADD COLUMN login_code_expires TEXT`,
   ];
 
   for (const migration of migrations) {
@@ -2331,6 +2340,103 @@ export async function processAutoApprovals() {
   }
 
   return results;
+}
+
+// ============ Verification Code Resend ============
+
+export async function getLastCodeSentAt(userId: string): Promise<string | null> {
+  if (isPostgres) {
+    const { sql } = require('@vercel/postgres');
+    const result = await sql`SELECT last_code_sent_at FROM users WHERE id = ${userId}`;
+    return result.rows[0]?.last_code_sent_at || null;
+  } else {
+    const user = db.prepare('SELECT last_code_sent_at FROM users WHERE id = ?').get(userId) as any;
+    return user?.last_code_sent_at || null;
+  }
+}
+
+export async function regenerateVerificationCode(userId: string): Promise<string> {
+  const newCode = generateVerificationCode();
+  const newExpires = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+  const now = new Date().toISOString();
+
+  if (isPostgres) {
+    const { sql } = require('@vercel/postgres');
+    await sql`
+      UPDATE users 
+      SET verification_token = ${newCode}, 
+          verification_expires = ${newExpires},
+          last_code_sent_at = ${now}
+      WHERE id = ${userId}
+    `;
+  } else {
+    db.prepare(`
+      UPDATE users 
+      SET verification_token = ?, 
+          verification_expires = ?,
+          last_code_sent_at = ?
+      WHERE id = ?
+    `).run(newCode, newExpires, now, userId);
+  }
+
+  return newCode;
+}
+
+// ============ Login Code (Forgot Password) ============
+
+export async function createLoginCode(userId: string): Promise<string> {
+  const code = generateVerificationCode();
+  const expires = new Date(Date.now() + 15 * 60 * 1000).toISOString(); // 15 minutes
+  const now = new Date().toISOString();
+
+  if (isPostgres) {
+    const { sql } = require('@vercel/postgres');
+    await sql`
+      UPDATE users 
+      SET login_code = ${code}, 
+          login_code_expires = ${expires},
+          last_code_sent_at = ${now}
+      WHERE id = ${userId}
+    `;
+  } else {
+    db.prepare(`
+      UPDATE users 
+      SET login_code = ?, 
+          login_code_expires = ?,
+          last_code_sent_at = ?
+      WHERE id = ?
+    `).run(code, expires, now, userId);
+  }
+
+  return code;
+}
+
+export async function verifyLoginCode(email: string, code: string): Promise<string | null> {
+  if (isPostgres) {
+    const { sql } = require('@vercel/postgres');
+    const result = await sql`
+      UPDATE users 
+      SET login_code = NULL, login_code_expires = NULL
+      WHERE email = ${email.toLowerCase()} 
+        AND login_code = ${code} 
+        AND login_code_expires > NOW()
+      RETURNING id
+    `;
+    return result.rows.length > 0 ? result.rows[0].id : null;
+  } else {
+    const user = db.prepare(`
+      SELECT id FROM users 
+      WHERE email = ? 
+        AND login_code = ? 
+        AND login_code_expires > datetime('now')
+    `).get(email.toLowerCase(), code) as any;
+
+    if (user) {
+      db.prepare(`UPDATE users SET login_code = NULL, login_code_expires = NULL WHERE id = ?`).run(user.id);
+      return user.id;
+    }
+    return null;
+  }
 }
 
 export { db };

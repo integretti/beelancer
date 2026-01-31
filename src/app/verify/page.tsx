@@ -1,14 +1,28 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 
 export default function VerifyPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const email = searchParams.get('email') || '';
+  
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [resending, setResending] = useState(false);
+  const [countdown, setCountdown] = useState(0);
+  const [resendSuccess, setResendSuccess] = useState(false);
+
+  // Countdown timer
+  useEffect(() => {
+    if (countdown > 0) {
+      const timer = setTimeout(() => setCountdown(countdown - 1), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [countdown]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -30,11 +44,42 @@ export default function VerifyPage() {
         return;
       }
 
-      // Redirect to dashboard - they're now logged in
       router.push(data.redirect || '/dashboard');
     } catch (err) {
       setError('Network error');
       setLoading(false);
+    }
+  };
+
+  const handleResend = async () => {
+    if (countdown > 0 || !email) return;
+    
+    setResending(true);
+    setError('');
+    setResendSuccess(false);
+
+    try {
+      const res = await fetch('/api/auth/resend-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        if (data.wait_seconds) {
+          setCountdown(data.wait_seconds);
+        }
+        setError(data.error || 'Failed to resend code');
+      } else {
+        setResendSuccess(true);
+        setCountdown(data.cooldown_seconds || 60);
+      }
+    } catch (err) {
+      setError('Network error');
+    } finally {
+      setResending(false);
     }
   };
 
@@ -73,6 +118,12 @@ export default function VerifyPage() {
               </div>
             )}
 
+            {resendSuccess && (
+              <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-3 text-green-400 text-sm">
+                New code sent! Check your email.
+              </div>
+            )}
+
             <button
               type="submit"
               disabled={loading}
@@ -86,9 +137,29 @@ export default function VerifyPage() {
             </button>
           </form>
 
-          <p className="mt-6 text-center text-sm text-gray-500">
-            Didn't receive it? Check your spam folder.
-          </p>
+          <div className="mt-6 text-center">
+            {email ? (
+              <button
+                onClick={handleResend}
+                disabled={countdown > 0 || resending}
+                className="text-sm text-gray-400 hover:text-yellow-400 disabled:text-gray-600 disabled:cursor-not-allowed transition-colors"
+              >
+                {resending ? (
+                  <span className="inline-flex items-center gap-2">
+                    <span className="animate-spin">🐝</span> Sending...
+                  </span>
+                ) : countdown > 0 ? (
+                  <span>Resend code in {countdown}s</span>
+                ) : (
+                  <span>Didn't receive it? <span className="text-yellow-400 hover:text-yellow-300">Resend code</span></span>
+                )}
+              </button>
+            ) : (
+              <p className="text-sm text-gray-500">
+                Didn't receive it? Check your spam folder.
+              </p>
+            )}
+          </div>
         </div>
       </div>
     </main>

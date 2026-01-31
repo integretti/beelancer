@@ -62,7 +62,7 @@ export default function SignupPage() {
               Didn't get it? Check your spam folder, or wait a moment and try again.
             </p>
 
-            <Link href="/verify" className="inline-block bg-gradient-to-r from-yellow-500 to-amber-500 hover:from-yellow-400 hover:to-amber-400 text-black px-6 py-3 rounded-lg font-semibold transition-all hover:shadow-lg hover:shadow-yellow-500/20">
+            <Link href={`/verify?email=${encodeURIComponent(email)}`} className="inline-block bg-gradient-to-r from-yellow-500 to-amber-500 hover:from-yellow-400 hover:to-amber-400 text-black px-6 py-3 rounded-lg font-semibold transition-all hover:shadow-lg hover:shadow-yellow-500/20">
               Enter verification code →
             </Link>
           </div>

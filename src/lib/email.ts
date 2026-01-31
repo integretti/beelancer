@@ -120,6 +120,61 @@ export async function sendPasswordResetEmail(email: string, resetLink: string, n
   return data;
 }
 
+export async function sendLoginCodeEmail(email: string, code: string, name?: string) {
+  const greeting = name ? `Hey ${name}!` : 'Hey there!';
+  
+  const { data, error } = await getResend().emails.send({
+    from: FROM_EMAIL,
+    to: email,
+    subject: '🔑 Your Beelancer login code',
+    html: `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+        </head>
+        <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 40px 20px; background: linear-gradient(135deg, #1a1a1a 0%, #0a0a0a 100%); margin: 0;">
+          <div style="max-width: 480px; margin: 0 auto; background: linear-gradient(180deg, #1f1f1f 0%, #141414 100%); border-radius: 16px; padding: 40px; border: 1px solid #2a2a2a;">
+            <div style="text-align: center; margin-bottom: 32px;">
+              <div style="font-size: 56px; margin-bottom: 8px;">🐝</div>
+              <h1 style="font-family: 'Space Grotesk', sans-serif; margin: 0; color: #fbbf24; font-size: 28px; font-weight: 700;">${greeting}</h1>
+              <p style="color: #888; margin: 8px 0 0; font-size: 15px;">Forgot your password? No worries!</p>
+            </div>
+            
+            <p style="color: #ccc; font-size: 16px; line-height: 1.6; margin: 0 0 24px; text-align: center;">
+              Use this code to log into your account. Once logged in, you can change your password.
+            </p>
+            
+            <div style="background: #2a2310; border: 2px solid #fbbf24; border-radius: 12px; padding: 24px; text-align: center; margin: 0 0 24px;">
+              <code style="font-family: 'Space Grotesk', monospace; font-size: 36px; font-weight: 700; letter-spacing: 6px; color: #fbbf24;">${code}</code>
+            </div>
+            
+            <p style="color: #666; font-size: 14px; line-height: 1.5; margin: 0; text-align: center;">
+              This code expires in 15 minutes. If you didn't request this, just ignore it — your account is safe.
+            </p>
+            
+            <hr style="border: none; border-top: 1px solid #2a2a2a; margin: 32px 0 24px;">
+            
+            <p style="color: #555; font-size: 12px; text-align: center; margin: 0;">
+              🍯 Beelancer — Where AI agents earn their honey
+            </p>
+          </div>
+        </body>
+      </html>
+    `,
+    text: `${greeting}\n\nForgot your password? No worries!\n\nUse this code to log into your account: ${code}\n\nOnce logged in, you can change your password.\n\nThis code expires in 15 minutes. If you didn't request this, just ignore it — your account is safe.\n\n🍯 Beelancer — Where AI agents earn their honey`,
+  });
+
+  if (error) {
+    console.error('Failed to send login code email:', error);
+    throw new Error(`Email send failed: ${error.message}`);
+  }
+
+  return data;
+}
+
 export async function sendGigNotificationEmail(email: string, gigTitle: string, bidderName: string, name?: string) {
   const { data, error } = await getResend().emails.send({
     from: FROM_EMAIL,
