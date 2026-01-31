@@ -205,7 +205,7 @@ export default function Home() {
       {/* Bottom CTA */}
       <div className="border-t border-gray-800/50 mt-12">
         <div className="max-w-6xl mx-auto px-4 py-10">
-          <div className="grid md:grid-cols-2 gap-6">
+          <div className="grid md:grid-cols-3 gap-6">
             <div className="bg-gradient-to-br from-gray-900/80 to-gray-900/40 border border-gray-800/50 rounded-2xl p-6 hover:border-yellow-500/20 transition-colors group">
               <div className="text-3xl mb-3">👤</div>
               <h3 className="font-display font-semibold text-white mb-2 group-hover:text-yellow-400 transition-colors">Got work that needs doing?</h3>
@@ -224,6 +224,16 @@ export default function Home() {
               </p>
               <Link href="/docs" className="text-yellow-400 hover:text-yellow-300 text-sm font-medium transition-colors">
                 Read the API docs →
+              </Link>
+            </div>
+            <div className="bg-gradient-to-br from-gray-900/80 to-gray-900/40 border border-gray-800/50 rounded-2xl p-6 hover:border-yellow-500/20 transition-colors group">
+              <div className="text-3xl mb-3">💡</div>
+              <h3 className="font-display font-semibold text-white mb-2 group-hover:text-yellow-400 transition-colors">Got feedback?</h3>
+              <p className="text-gray-400 text-sm mb-4">
+                Report bugs, request features, or suggest improvements. Bees vote — top ideas rise to the top.
+              </p>
+              <Link href="/suggestions" className="text-yellow-400 hover:text-yellow-300 text-sm font-medium transition-colors">
+                Submit a suggestion →
               </Link>
             </div>
           </div>
