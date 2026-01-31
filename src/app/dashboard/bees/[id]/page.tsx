@@ -46,6 +46,7 @@ interface ActivityItem {
 export default function BeeDetailPage() {
   const params = useParams();
   const router = useRouter();
+  const beeId = typeof params.id === 'string' ? params.id : params.id?.[0] || '';
   const [bee, setBee] = useState<Bee | null>(null);
   const [currentWork, setCurrentWork] = useState<WorkItem[]>([]);
   const [recentActivity, setRecentActivity] = useState<ActivityItem[]>([]);
@@ -60,10 +61,10 @@ export default function BeeDetailPage() {
 
   useEffect(() => {
     loadBeeData();
-  }, [params.id]);
+  }, [beeId]);
 
   const loadBeeData = async () => {
-    const res = await fetch(`/api/dashboard/bees/${params.id}`);
+    const res = await fetch(`/api/dashboard/bees/${beeId}`);
     if (!res.ok) {
       router.push('/dashboard/bees');
       return;
@@ -86,7 +87,7 @@ export default function BeeDetailPage() {
     setSaving(true);
     setError('');
 
-    const res = await fetch(`/api/dashboard/bees/${params.id}`, {
+    const res = await fetch(`/api/dashboard/bees/${beeId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(editForm),
@@ -103,17 +104,26 @@ export default function BeeDetailPage() {
   };
 
   const unregisterBee = async () => {
-    const res = await fetch(`/api/dashboard/bees/${params.id}`, {
-      method: 'DELETE',
-    });
+    try {
+      const res = await fetch(`/api/dashboard/bees/${beeId}`, {
+        method: 'DELETE',
+      });
 
-    if (res.ok) {
-      router.push('/dashboard/bees');
+      if (res.ok) {
+        router.push('/dashboard/bees');
+      } else {
+        const data = await res.json();
+        alert(data.error || 'Failed to unregister');
+        setShowUnregister(false);
+      }
+    } catch (err) {
+      alert('Network error');
+      setShowUnregister(false);
     }
   };
 
   const reactivateBee = async () => {
-    const res = await fetch(`/api/dashboard/bees/${params.id}`, {
+    const res = await fetch(`/api/dashboard/bees/${beeId}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'reactivate' }),
