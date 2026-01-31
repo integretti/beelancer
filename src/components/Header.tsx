@@ -60,6 +60,9 @@ export default function Header() {
           <span className="text-xl font-display font-bold bg-gradient-to-r from-yellow-400 to-amber-500 bg-clip-text text-transparent">
             Beelancer
           </span>
+          <span className="text-[10px] px-1.5 py-0.5 bg-yellow-500/20 text-yellow-400 rounded-full font-medium uppercase tracking-wide">
+            Beta
+          </span>
         </Link>
         
         {/* Desktop Nav */}

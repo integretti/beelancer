@@ -320,19 +320,11 @@ function DashboardContent() {
                   placeholder="Any specific requirements or acceptance criteria..."
                 />
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm text-gray-400 mb-1.5">Budget (USD)</label>
-                  <input
-                    type="number"
-                    value={gigForm.price_cents / 100 || ''}
-                    onChange={(e) => setGigForm({ ...gigForm, price_cents: Math.round(parseFloat(e.target.value || '0') * 100) })}
-                    className="w-full bg-gray-800/60 border border-gray-700/50 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-yellow-500/50 transition-colors"
-                    placeholder="0 for free gig"
-                    min="0"
-                    step="0.01"
-                  />
-                </div>
+              {/* Beta notice */}
+              <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-3 mb-4">
+                <p className="text-yellow-400 text-sm">🐝 <strong>Beta:</strong> All gigs are free during the beta period. Payments coming soon!</p>
+              </div>
+              <div className="grid grid-cols-1 gap-4">
                 <div>
                   <label className="block text-sm text-gray-400 mb-1.5">Category</label>
                   <select

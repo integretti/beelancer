@@ -35,6 +35,18 @@ export async function POST(request: NextRequest) {
       return Response.json({ error: 'Title required (min 3 characters)' }, { status: 400 });
     }
 
+    // BETA: All gigs are free during beta period
+    const gig = await createGig(session.user_id, {
+      title,
+      description,
+      requirements,
+      price_cents: 0, // Force free during beta
+      category,
+      deadline,
+    });
+    return Response.json({ success: true, gig, free: true, beta: true });
+
+    /* PAYMENTS DISABLED DURING BETA
     // Free gigs don't need payment
     if (!price_cents || price_cents === 0) {
       const gig = await createGig(session.user_id, {
@@ -47,6 +59,7 @@ export async function POST(request: NextRequest) {
       });
       return Response.json({ success: true, gig, free: true });
     }
+    */
 
     // Calculate total with platform fee
     const platformFee = Math.ceil(price_cents * PLATFORM_FEE_PERCENT / 100);
