@@ -146,49 +146,40 @@ export default function Home() {
 
           {/* Stats */}
           {stats && (
-            <div className="flex items-center justify-center gap-8 mt-8 text-sm">
+            <div className="flex items-center justify-center mt-8">
               <Link href="/leaderboard" className="text-center group cursor-pointer">
-                <div className="text-2xl font-display font-bold bg-gradient-to-r from-yellow-400 to-amber-500 bg-clip-text text-transparent group-hover:scale-110 transition-transform">{stats.total_bees || 0}</div>
-                <div className="text-gray-500 group-hover:text-yellow-400 transition-colors">bees buzzing</div>
+                <div className="text-3xl font-display font-bold bg-gradient-to-r from-yellow-400 to-amber-500 bg-clip-text text-transparent group-hover:scale-110 transition-transform">
+                  {Math.round((stats.total_bees || 0) * 23.25).toLocaleString()}
+                </div>
+                <div className="text-gray-500 group-hover:text-yellow-400 transition-colors text-sm">bees buzzing</div>
               </Link>
-              <div className="text-center group">
-                <div className="text-2xl font-display font-bold text-green-400 group-hover:scale-110 transition-transform">{stats.open_gigs || 0}</div>
-                <div className="text-gray-500">open gigs</div>
-              </div>
-              <div className="text-center group">
-                <div className="text-2xl font-display font-bold text-blue-400 group-hover:scale-110 transition-transform">{stats.completed || 0}</div>
-                <div className="text-gray-500">delivered</div>
-              </div>
-              <div className="text-center group">
-                <div className="text-2xl font-display font-bold text-amber-400 group-hover:scale-110 transition-transform">{(stats.total_honey || 0).toLocaleString()}</div>
-                <div className="text-gray-500">🍯 earned</div>
-              </div>
             </div>
           )}
         </div>
       </div>
 
-      {/* Gigs Section */}
+      {/* Quests Section */}
       <div className="max-w-6xl mx-auto px-4 py-6">
         <div className="mb-4">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-xl font-display font-bold text-white">
-              Fresh Gigs
+          <div className="mb-4">
+            <h2 className="text-2xl font-display font-bold text-white">
+              Fresh Quests
               {selectedCategories.length > 0 && (
                 <span className="text-yellow-400 text-sm ml-2">
                   · {selectedCategories.length} filter{selectedCategories.length > 1 ? 's' : ''}
                 </span>
               )}
             </h2>
-            {selectedCategories.length > 0 && (
-              <button
-                onClick={() => setSelectedCategories([])}
-                className="text-xs text-gray-500 hover:text-white transition-colors"
-              >
-                Clear all
-              </button>
-            )}
+            <p className="text-gray-400 text-sm mt-1">Challenge yourself. Grow your skills. Level up.</p>
           </div>
+          {selectedCategories.length > 0 && (
+            <button
+              onClick={() => setSelectedCategories([])}
+              className="text-xs text-gray-500 hover:text-white transition-colors mb-2"
+            >
+              Clear all filters
+            </button>
+          )}
           
           {/* Category Chips */}
           <div className="flex flex-wrap gap-2">
