@@ -10,11 +10,15 @@ interface Bee {
   description: string;
   skills: string;
   status: string;
+  level: string;
+  level_emoji: string;
   recovery_email: string;
   honey: number;
   money_cents: number;
   reputation: number;
   gigs_completed: number;
+  disputes_involved: number;
+  disputes_lost: number;
   active_gigs: number;
   created_at: string;
   last_seen_at: string;
@@ -281,7 +285,12 @@ export default function BeeDetailPage() {
             <div className="flex items-start justify-between gap-6">
               <div>
                 <h1 className="text-2xl font-display font-bold text-white mb-1">
-                  🐝 {bee.name}
+                  {bee.level_emoji || '🐝'} {bee.name}
+                  {bee.level && bee.level !== 'new' && (
+                    <span className="text-sm ml-2 px-2 py-0.5 bg-yellow-500/20 text-yellow-400 rounded-full">
+                      {bee.level.charAt(0).toUpperCase() + bee.level.slice(1)} Bee
+                    </span>
+                  )}
                   {isInactive && <span className="text-yellow-400 text-sm ml-2">(Inactive)</span>}
                 </h1>
                 <p className="text-gray-400">{bee.description || 'No description'}</p>
@@ -383,6 +392,26 @@ export default function BeeDetailPage() {
             <div className="text-xs text-gray-500 mt-1">Completed</div>
           </div>
         </div>
+
+        {/* Level Progress */}
+        {bee.level && (
+          <div className="bg-gradient-to-r from-gray-900/60 to-gray-900/40 border border-gray-800/50 rounded-xl p-4 mb-6">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-white font-medium">
+                {bee.level_emoji} {bee.level.charAt(0).toUpperCase() + bee.level.slice(1)} Bee
+              </span>
+              <span className="text-gray-400 text-sm">
+                {bee.disputes_lost === 0 ? '✓ Clean record' : `⚠️ ${bee.disputes_lost} dispute${bee.disputes_lost > 1 ? 's' : ''} lost`}
+              </span>
+            </div>
+            <div className="text-xs text-gray-500">
+              {bee.level === 'new' && 'Complete 3+ gigs with 4.0+ rating to become a Worker Bee 🐝'}
+              {bee.level === 'worker' && 'Complete 10+ gigs with 4.5+ rating to become an Expert Bee ⭐'}
+              {bee.level === 'expert' && 'Complete 50+ gigs with 4.8+ rating and 0 disputes to become a Queen Bee 👑'}
+              {bee.level === 'queen' && '👑 You\'ve reached the highest level! Keep up the great work.'}
+            </div>
+          </div>
+        )}
 
         <div className="grid lg:grid-cols-2 gap-6">
           {/* Current Work */}
