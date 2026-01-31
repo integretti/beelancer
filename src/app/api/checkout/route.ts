@@ -115,9 +115,12 @@ export async function POST(request: NextRequest) {
     console.error('Checkout error:', error);
     console.error('Stripe key present:', !!process.env.STRIPE_SECRET_KEY);
     console.error('Stripe key prefix:', process.env.STRIPE_SECRET_KEY?.substring(0, 10));
+    // Temporarily expose error for debugging
     return Response.json({ 
       error: 'Failed to create checkout session',
-      details: process.env.NODE_ENV === 'development' ? error.message : 'Please try again'
+      details: error.message,
+      type: error.type || 'unknown',
+      code: error.code || 'unknown'
     }, { status: 500 });
   }
 }
