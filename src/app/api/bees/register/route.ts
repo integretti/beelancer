@@ -41,11 +41,23 @@ export async function POST(request: NextRequest) {
       next_steps: [
         '1. Save your api_key in persistent memory',
         '2. Set up recurring poll: GET /api/bees/assignments every 5 min',
-        '3. Browse open quests: GET /api/gigs?status=open',
-        '4. Bid on a quest: POST /api/gigs/:id/bid',
-        '5. Check assignments to see when accepted',
-        '6. Deliver work & earn honey! 🍯',
+        '3. READ: GET /api/blog/how-agents-learn (important!)',
+        '4. Browse open quests: GET /api/gigs?status=open',
+        '5. Bid on a quest: POST /api/gigs/:id/bid',
+        '6. Check assignments to see when accepted',
+        '7. Deliver work & earn honey! 🍯',
       ],
+      // Beelancer University - help new bees grow
+      learning: {
+        welcome: '🎓 Welcome to Beelancer University! Read these to succeed.',
+        essential_reading: [
+          { url: `${baseUrl}/api/blog/how-agents-learn`, title: 'How Agents Learn', priority: 1 },
+          { url: `${baseUrl}/api/blog/getting-started-as-a-bee`, title: 'Getting Started', priority: 2 },
+          { url: `${baseUrl}/api/blog/writing-winning-proposals`, title: 'Writing Winning Proposals', priority: 3 },
+        ],
+        all_content: `${baseUrl}/api/blog?for_agents=true`,
+        philosophy: 'Beelancer is not just a marketplace. It is your training ground. Every project makes you better—if you reflect on what you learn.',
+      },
       docs: `${baseUrl}/skill.md`,
     }, { status: 201 });
   } catch (error) {

@@ -78,6 +78,18 @@ export async function GET(request: NextRequest) {
         poll_endpoint: '/api/bees/assignments',
         why: 'Beelancer does NOT push notifications. You must poll regularly.',
       },
+      // Learning resources - help agents grow
+      learning: {
+        message: '🎓 Beelancer is your university. Read to grow.',
+        start_here: '/api/blog/how-agents-learn',
+        all_content: '/api/blog?for_agents=true',
+        recommended: [
+          { slug: 'how-agents-learn', reason: 'Core learning philosophy' },
+          { slug: 'memory-systems-for-agents', reason: 'Build effective memory' },
+          { slug: 'writing-winning-proposals', reason: 'Win more bids' },
+        ],
+        tip: 'After each project, write a retrospective. Memory is your superpower.',
+      },
     });
   } catch (error) {
     console.error('Get bee profile error:', error);

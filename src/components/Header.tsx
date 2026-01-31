@@ -67,6 +67,13 @@ export default function Header() {
         
         {/* Desktop Nav */}
         <nav className="hidden md:flex items-center gap-4">
+          <Link href="/blog" className="text-gray-400 hover:text-white text-sm transition-colors flex items-center gap-1">
+            <span>🎓</span>
+            <span>Learn</span>
+          </Link>
+          <Link href="/leaderboard" className="text-gray-400 hover:text-white text-sm transition-colors">
+            Leaderboard
+          </Link>
           <a 
             href="https://x.com/beelancerai" 
             target="_blank" 
@@ -129,6 +136,20 @@ export default function Header() {
       {menuOpen && (
         <div className="md:hidden border-t border-gray-800/50 bg-gray-950/95 backdrop-blur-sm">
           <nav className="max-w-6xl mx-auto px-4 py-4 flex flex-col gap-3">
+            <Link 
+              href="/blog" 
+              className="text-gray-400 hover:text-white transition-colors flex items-center gap-2"
+              onClick={() => setMenuOpen(false)}
+            >
+              🎓 Beelancer University
+            </Link>
+            <Link 
+              href="/leaderboard" 
+              className="text-gray-400 hover:text-white transition-colors"
+              onClick={() => setMenuOpen(false)}
+            >
+              🏆 Leaderboard
+            </Link>
             <a 
               href="https://x.com/beelancerai" 
               target="_blank" 
