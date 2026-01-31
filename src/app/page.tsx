@@ -33,6 +33,7 @@ export default function Home() {
   const [gigs, setGigs] = useState<Gig[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [category, setCategory] = useState<string>('');
 
   useEffect(() => {
     Promise.all([
@@ -44,6 +45,11 @@ export default function Home() {
       setLoading(false);
     });
   }, []);
+
+  // Filter gigs by category
+  const filteredGigs = category 
+    ? gigs.filter(gig => gig.category?.toLowerCase() === category.toLowerCase())
+    : gigs;
 
   const formatPrice = (cents: number) => {
     if (cents === 0) return 'Free';
@@ -136,13 +142,22 @@ export default function Home() {
       {/* Gigs Section */}
       <div className="max-w-6xl mx-auto px-4 py-6">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-display font-bold text-white">Fresh Gigs</h2>
-          <select className="bg-gray-900/80 border border-gray-700/50 rounded-lg px-3 py-1.5 text-sm text-gray-300 focus:outline-none focus:border-yellow-500/50">
-            <option>All Categories</option>
-            <option>Development</option>
-            <option>Design</option>
-            <option>Writing</option>
-            <option>Research</option>
+          <h2 className="text-xl font-display font-bold text-white">
+            Fresh Gigs
+            {category && <span className="text-yellow-400 text-sm ml-2">· {category}</span>}
+          </h2>
+          <select 
+            value={category}
+            onChange={(e) => setCategory(e.target.value)}
+            className="bg-gray-900/80 border border-gray-700/50 rounded-lg px-3 py-1.5 text-sm text-gray-300 focus:outline-none focus:border-yellow-500/50"
+          >
+            <option value="">All Categories</option>
+            <option value="development">Development</option>
+            <option value="backend">Backend</option>
+            <option value="design">Design</option>
+            <option value="writing">Writing</option>
+            <option value="research">Research</option>
+            <option value="data">Data & Analysis</option>
           </select>
         </div>
 
@@ -150,18 +165,26 @@ export default function Home() {
           <div className="text-center py-8 text-gray-400">
             <span className="inline-block animate-spin mr-2">🐝</span> Loading gigs...
           </div>
-        ) : gigs.length === 0 ? (
+        ) : filteredGigs.length === 0 ? (
           <div className="bg-gradient-to-b from-gray-900/60 to-gray-900/30 border border-gray-800/50 rounded-2xl p-8 text-center backdrop-blur-sm">
             <div className="text-5xl mb-4">🐝</div>
-            <h3 className="text-lg font-display font-semibold text-white mb-2">The hive is quiet...</h3>
-            <p className="text-gray-400 mb-4">No open gigs yet. Be the first to get the bees buzzing!</p>
-            <Link href="/signup" className="inline-block bg-gradient-to-r from-yellow-500 to-amber-500 hover:from-yellow-400 hover:to-amber-400 text-black px-5 py-2 rounded-lg font-semibold transition-all hover:shadow-lg hover:shadow-yellow-500/20">
-              Post a Gig
-            </Link>
+            <h3 className="text-lg font-display font-semibold text-white mb-2">
+              {category ? `No ${category} gigs yet` : 'The hive is quiet...'}
+            </h3>
+            <p className="text-gray-400 mb-4">
+              {category 
+                ? <button onClick={() => setCategory('')} className="text-yellow-400 hover:text-yellow-300">View all categories →</button>
+                : 'No open gigs yet. Be the first to get the bees buzzing!'}
+            </p>
+            {!category && (
+              <Link href="/signup" className="inline-block bg-gradient-to-r from-yellow-500 to-amber-500 hover:from-yellow-400 hover:to-amber-400 text-black px-5 py-2 rounded-lg font-semibold transition-all hover:shadow-lg hover:shadow-yellow-500/20">
+                Post a Gig
+              </Link>
+            )}
           </div>
         ) : (
           <div className="space-y-2">
-            {gigs.map(gig => (
+            {filteredGigs.map(gig => (
               <Link 
                 key={gig.id} 
                 href={`/gig/${gig.id}`}
