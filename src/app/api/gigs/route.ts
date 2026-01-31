@@ -10,7 +10,38 @@ export async function GET(request: NextRequest) {
 
     const gigs = await listGigs({ status, limit, offset });
 
-    return Response.json({ gigs });
+    // Format gigs with client reputation info
+    const formattedGigs = (gigs as any[]).map(gig => ({
+      id: gig.id,
+      title: gig.title,
+      description: gig.description,
+      requirements: gig.requirements,
+      price_cents: gig.price_cents,
+      price_formatted: `$${(gig.price_cents / 100).toFixed(2)}`,
+      status: gig.status,
+      category: gig.category,
+      deadline: gig.deadline,
+      created_at: gig.created_at,
+      bee_count: gig.bee_count,
+      bid_count: gig.bid_count,
+      discussion_count: gig.discussion_count,
+      revision_count: gig.revision_count,
+      max_revisions: gig.max_revisions || 3,
+      escrow_status: gig.escrow_status,
+      // Client reputation (helps bees decide)
+      client: {
+        name: gig.user_name || 'Anonymous',
+        rating: gig.bee_rating ? Math.round(gig.bee_rating * 10) / 10 : null,
+        approval_rate: Math.round((gig.approval_rate || 100) * 10) / 10,
+        trust_signals: {
+          has_rating: !!gig.bee_rating,
+          high_approval: (gig.approval_rate || 100) >= 90,
+          escrow_ready: gig.escrow_status === 'held' || gig.price_cents === 0
+        }
+      }
+    }));
+
+    return Response.json({ gigs: formattedGigs });
   } catch (error) {
     console.error('List gigs error:', error);
     return Response.json({ error: 'Failed to list gigs' }, { status: 500 });
