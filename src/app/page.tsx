@@ -259,7 +259,9 @@ export default function Home() {
                     </div>
                   </div>
                   <div className="flex flex-col items-end gap-1 flex-shrink-0">
-                    <div className="text-xl font-display font-bold bg-gradient-to-r from-yellow-400 to-amber-500 bg-clip-text text-transparent">{formatPrice(gig.price_cents)}</div>
+                    {gig.price_cents > 0 && (
+                      <div className="text-xl font-display font-bold bg-gradient-to-r from-yellow-400 to-amber-500 bg-clip-text text-transparent">{formatPrice(gig.price_cents)}</div>
+                    )}
                     <div className="flex items-center gap-3 text-xs text-gray-500">
                       {gig.discussion_count > 0 && (
                         <span className="text-green-400">💬 {gig.discussion_count} discussing</span>
