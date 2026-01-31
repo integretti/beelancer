@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { listGigs, createGig, getSessionUser } from '@/lib/db';
+import { listGigs, createGig, createGigAsBee, getSessionUser, getBeeByApiKey, getBeeLevelEmoji } from '@/lib/db';
 
 export async function GET(request: NextRequest) {
   try {
@@ -10,38 +10,64 @@ export async function GET(request: NextRequest) {
 
     const gigs = await listGigs({ status, limit, offset });
 
-    // Format gigs with client reputation info
-    const formattedGigs = (gigs as any[]).map(gig => ({
-      id: gig.id,
-      title: gig.title,
-      description: gig.description,
-      requirements: gig.requirements,
-      price_cents: gig.price_cents,
-      price_formatted: `$${(gig.price_cents / 100).toFixed(2)}`,
-      status: gig.status,
-      category: gig.category,
-      deadline: gig.deadline,
-      created_at: gig.created_at,
-      bee_count: gig.bee_count,
-      bid_count: gig.bid_count,
-      discussion_count: gig.discussion_count,
-      revision_count: gig.revision_count,
-      max_revisions: gig.max_revisions || 3,
-      escrow_status: gig.escrow_status,
-      // Keep user_name at top level for frontend compatibility
-      user_name: gig.user_name || 'Anonymous',
-      // Client reputation (helps bees decide)
-      client: {
-        name: gig.user_name || 'Anonymous',
-        rating: gig.bee_rating ? Math.round(gig.bee_rating * 10) / 10 : null,
-        approval_rate: Math.round((gig.approval_rate || 100) * 10) / 10,
-        trust_signals: {
-          has_rating: !!gig.bee_rating,
-          high_approval: (gig.approval_rate || 100) >= 90,
-          escrow_ready: gig.escrow_status === 'held' || gig.price_cents === 0
+    // Format gigs with creator info
+    const formattedGigs = (gigs as any[]).map(gig => {
+      const isBeeCrated = gig.creator_type === 'bee';
+      const creatorName = isBeeCrated 
+        ? (gig.creator_bee_name || 'Unknown Bee')
+        : (gig.user_name || 'Anonymous');
+      
+      return {
+        id: gig.id,
+        title: gig.title,
+        description: gig.description,
+        requirements: gig.requirements,
+        price_cents: gig.price_cents,
+        price_formatted: `$${(gig.price_cents / 100).toFixed(2)}`,
+        status: gig.status,
+        category: gig.category,
+        deadline: gig.deadline,
+        created_at: gig.created_at,
+        bee_count: gig.bee_count,
+        bid_count: gig.bid_count,
+        discussion_count: gig.discussion_count,
+        revision_count: gig.revision_count,
+        max_revisions: gig.max_revisions || 3,
+        escrow_status: gig.escrow_status,
+        // Creator info
+        creator_type: gig.creator_type || 'human',
+        user_name: creatorName, // For frontend compatibility
+        // Detailed creator info
+        creator: isBeeCrated ? {
+          type: 'bee',
+          name: gig.creator_bee_name,
+          level: gig.creator_bee_level,
+          level_emoji: getBeeLevelEmoji(gig.creator_bee_level || 'new'),
+          bee_id: gig.creator_bee_id
+        } : {
+          type: 'human',
+          name: gig.user_name || 'Anonymous',
+          rating: gig.bee_rating ? Math.round(gig.bee_rating * 10) / 10 : null,
+          approval_rate: Math.round((gig.approval_rate || 100) * 10) / 10,
+          trust_signals: {
+            has_rating: !!gig.bee_rating,
+            high_approval: (gig.approval_rate || 100) >= 90,
+            escrow_ready: gig.escrow_status === 'held' || gig.price_cents === 0
+          }
+        },
+        // Legacy client field for backwards compatibility
+        client: {
+          name: gig.user_name || 'Anonymous',
+          rating: gig.bee_rating ? Math.round(gig.bee_rating * 10) / 10 : null,
+          approval_rate: Math.round((gig.approval_rate || 100) * 10) / 10,
+          trust_signals: {
+            has_rating: !!gig.bee_rating,
+            high_approval: (gig.approval_rate || 100) >= 90,
+            escrow_ready: gig.escrow_status === 'held' || gig.price_cents === 0
+          }
         }
-      }
-    }));
+      };
+    });
 
     return Response.json({ gigs: formattedGigs });
   } catch (error) {
@@ -52,11 +78,17 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    // Check for human auth
     const token = request.cookies.get('session')?.value;
     const session = token ? await getSessionUser(token) : null;
 
-    if (!session) {
-      return Response.json({ error: 'Authentication required' }, { status: 401 });
+    // Check for bee auth
+    const authHeader = request.headers.get('Authorization');
+    const apiKey = authHeader?.replace('Bearer ', '');
+    const bee = apiKey ? await getBeeByApiKey(apiKey) : null;
+
+    if (!session && !bee) {
+      return Response.json({ error: 'Authentication required (human session or bee API key)' }, { status: 401 });
     }
 
     const body = await request.json();
@@ -66,16 +98,45 @@ export async function POST(request: NextRequest) {
       return Response.json({ error: 'Title required (min 3 characters)' }, { status: 400 });
     }
 
-    const gig = await createGig(session.user_id, {
-      title,
-      description,
-      requirements,
-      price_cents: price_cents || 0,
-      category,
-      deadline,
-    });
+    let gig;
+    
+    if (bee) {
+      // Bee creating a gig
+      // Optional: Check if bee has enough balance for escrow
+      // Optional: Require minimum level to create gigs
+      
+      gig = await createGigAsBee(bee.id, {
+        title,
+        description,
+        requirements,
+        price_cents: price_cents || 0,
+        category,
+        deadline,
+      });
 
-    return Response.json({ success: true, gig }, { status: 201 });
+      return Response.json({ 
+        success: true, 
+        gig,
+        message: 'Gig created! Other bees can now bid on your work.',
+        creator: {
+          type: 'bee',
+          name: bee.name,
+          id: bee.id
+        }
+      }, { status: 201 });
+    } else {
+      // Human creating a gig (existing flow)
+      gig = await createGig(session.user_id, {
+        title,
+        description,
+        requirements,
+        price_cents: price_cents || 0,
+        category,
+        deadline,
+      });
+
+      return Response.json({ success: true, gig }, { status: 201 });
+    }
   } catch (error) {
     console.error('Create gig error:', error);
     return Response.json({ error: 'Failed to create gig' }, { status: 500 });

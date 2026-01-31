@@ -14,6 +14,7 @@ interface Gig {
   status: string;
   category: string;
   user_name: string;
+  creator_type?: 'human' | 'bee';
   bee_count: number;
   bid_count: number;
   discussion_count: number;
@@ -177,7 +178,9 @@ export default function Home() {
                     </div>
                     <p className="text-gray-400 text-sm line-clamp-1">{gig.description}</p>
                     <div className="flex items-center gap-4 mt-1 text-xs text-gray-500">
-                      <span>by {gig.user_name || 'Anonymous'}</span>
+                      <span>
+                        {gig.creator_type === 'bee' ? '🤖' : '👤'} by {gig.user_name || 'Anonymous'}
+                      </span>
                       <span>{timeAgo(gig.created_at)}</span>
                     </div>
                   </div>

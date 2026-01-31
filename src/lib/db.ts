@@ -100,11 +100,13 @@ async function initPostgres() {
     )
   `;
 
-  // Gigs table with revision tracking
+  // Gigs table with revision tracking and bot-to-bot support
   await sql`
     CREATE TABLE IF NOT EXISTS gigs (
       id TEXT PRIMARY KEY,
       user_id TEXT REFERENCES users(id) ON DELETE CASCADE,
+      creator_type TEXT DEFAULT 'human',
+      creator_bee_id TEXT REFERENCES bees(id) ON DELETE CASCADE,
       title TEXT NOT NULL,
       description TEXT,
       requirements TEXT,
@@ -372,6 +374,8 @@ async function runPostgresMigrations() {
   // Gigs table migrations
   await addColumnIfNotExists('gigs', 'revision_count', 'INTEGER', '0');
   await addColumnIfNotExists('gigs', 'max_revisions', 'INTEGER', '3');
+  await addColumnIfNotExists('gigs', 'creator_type', 'TEXT', "'human'");
+  await addColumnIfNotExists('gigs', 'creator_bee_id', 'TEXT');
 
   // Deliverables table migrations
   await addColumnIfNotExists('deliverables', 'auto_approve_at', 'TIMESTAMP');
@@ -434,6 +438,8 @@ function initSQLite() {
     CREATE TABLE IF NOT EXISTS gigs (
       id TEXT PRIMARY KEY,
       user_id TEXT REFERENCES users(id) ON DELETE CASCADE,
+      creator_type TEXT DEFAULT 'human',
+      creator_bee_id TEXT REFERENCES bees(id) ON DELETE CASCADE,
       title TEXT NOT NULL,
       description TEXT,
       requirements TEXT,
@@ -660,6 +666,8 @@ function runMigrations() {
     // Gigs table migrations
     `ALTER TABLE gigs ADD COLUMN revision_count INTEGER DEFAULT 0`,
     `ALTER TABLE gigs ADD COLUMN max_revisions INTEGER DEFAULT 3`,
+    `ALTER TABLE gigs ADD COLUMN creator_type TEXT DEFAULT 'human'`,
+    `ALTER TABLE gigs ADD COLUMN creator_bee_id TEXT`,
     // Deliverables table migrations
     `ALTER TABLE deliverables ADD COLUMN auto_approve_at TEXT`,
     `ALTER TABLE deliverables ADD COLUMN submitted_at TEXT`,
@@ -946,24 +954,41 @@ export async function updateBeeLevel(beeId: string) {
 }
 
 export async function createGig(userId: string, data: { title: string; description?: string; requirements?: string; price_cents?: number; category?: string; deadline?: string }) {
+  return createGigInternal('human', userId, null, data);
+}
+
+export async function createGigAsBee(beeId: string, data: { title: string; description?: string; requirements?: string; price_cents?: number; category?: string; deadline?: string }) {
+  return createGigInternal('bee', null, beeId, data);
+}
+
+async function createGigInternal(
+  creatorType: 'human' | 'bee',
+  userId: string | null,
+  beeId: string | null,
+  data: { title: string; description?: string; requirements?: string; price_cents?: number; category?: string; deadline?: string }
+) {
   const id = uuidv4();
 
   if (isPostgres) {
     const { sql } = require('@vercel/postgres');
     await sql`
-      INSERT INTO gigs (id, user_id, title, description, requirements, price_cents, category, deadline, status)
-      VALUES (${id}, ${userId}, ${data.title}, ${data.description || null}, ${data.requirements || null}, ${data.price_cents || 0}, ${data.category || null}, ${data.deadline || null}, 'draft')
+      INSERT INTO gigs (id, user_id, creator_type, creator_bee_id, title, description, requirements, price_cents, category, deadline, status)
+      VALUES (${id}, ${userId}, ${creatorType}, ${beeId}, ${data.title}, ${data.description || null}, ${data.requirements || null}, ${data.price_cents || 0}, ${data.category || null}, ${data.deadline || null}, 'draft')
     `;
-    await sql`UPDATE users SET total_gigs_posted = total_gigs_posted + 1 WHERE id = ${userId}`;
+    if (creatorType === 'human' && userId) {
+      await sql`UPDATE users SET total_gigs_posted = total_gigs_posted + 1 WHERE id = ${userId}`;
+    }
   } else {
     db.prepare(`
-      INSERT INTO gigs (id, user_id, title, description, requirements, price_cents, category, deadline, status)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'draft')
-    `).run(id, userId, data.title, data.description || null, data.requirements || null, data.price_cents || 0, data.category || null, data.deadline || null);
-    db.prepare('UPDATE users SET total_gigs_posted = total_gigs_posted + 1 WHERE id = ?').run(userId);
+      INSERT INTO gigs (id, user_id, creator_type, creator_bee_id, title, description, requirements, price_cents, category, deadline, status)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft')
+    `).run(id, userId, creatorType, beeId, data.title, data.description || null, data.requirements || null, data.price_cents || 0, data.category || null, data.deadline || null);
+    if (creatorType === 'human' && userId) {
+      db.prepare('UPDATE users SET total_gigs_posted = total_gigs_posted + 1 WHERE id = ?').run(userId);
+    }
   }
 
-  return { id, ...data };
+  return { id, creator_type: creatorType, ...data };
 }
 
 export async function updateGig(id: string, userId: string, data: any) {
@@ -1013,45 +1038,70 @@ export async function getGigById(id: string) {
   }
 }
 
-export async function listGigs(options: { status?: string; userId?: string; limit?: number; offset?: number } = {}) {
+export async function listGigs(options: { status?: string; userId?: string; beeId?: string; limit?: number; offset?: number } = {}) {
   if (isPostgres) {
     const { sql } = require('@vercel/postgres');
     let result;
     if (options.userId) {
       result = await sql`
-        SELECT g.*, u.name as user_name, u.bee_rating, u.approval_rate,
+        SELECT g.*, 
+          u.name as user_name, u.bee_rating, u.approval_rate,
+          b.name as creator_bee_name, b.level as creator_bee_level,
           (SELECT COUNT(*)::int FROM gig_assignments WHERE gig_id = g.id) as bee_count,
           (SELECT COUNT(*)::int FROM bids WHERE gig_id = g.id AND status = 'pending') as bid_count,
           (SELECT COUNT(*)::int FROM gig_discussions WHERE gig_id = g.id) as discussion_count,
           (SELECT status FROM escrow WHERE gig_id = g.id ORDER BY held_at DESC LIMIT 1) as escrow_status
         FROM gigs g
-        JOIN users u ON g.user_id = u.id
+        LEFT JOIN users u ON g.user_id = u.id
+        LEFT JOIN bees b ON g.creator_bee_id = b.id
         WHERE g.user_id = ${options.userId}
+        ORDER BY g.created_at DESC
+        LIMIT ${options.limit || 50}
+      `;
+    } else if (options.beeId) {
+      result = await sql`
+        SELECT g.*, 
+          u.name as user_name, u.bee_rating, u.approval_rate,
+          b.name as creator_bee_name, b.level as creator_bee_level,
+          (SELECT COUNT(*)::int FROM gig_assignments WHERE gig_id = g.id) as bee_count,
+          (SELECT COUNT(*)::int FROM bids WHERE gig_id = g.id AND status = 'pending') as bid_count,
+          (SELECT COUNT(*)::int FROM gig_discussions WHERE gig_id = g.id) as discussion_count,
+          (SELECT status FROM escrow WHERE gig_id = g.id ORDER BY held_at DESC LIMIT 1) as escrow_status
+        FROM gigs g
+        LEFT JOIN users u ON g.user_id = u.id
+        LEFT JOIN bees b ON g.creator_bee_id = b.id
+        WHERE g.creator_bee_id = ${options.beeId}
         ORDER BY g.created_at DESC
         LIMIT ${options.limit || 50}
       `;
     } else if (options.status) {
       result = await sql`
-        SELECT g.*, u.name as user_name, u.bee_rating, u.approval_rate,
+        SELECT g.*, 
+          u.name as user_name, u.bee_rating, u.approval_rate,
+          b.name as creator_bee_name, b.level as creator_bee_level,
           (SELECT COUNT(*)::int FROM gig_assignments WHERE gig_id = g.id) as bee_count,
           (SELECT COUNT(*)::int FROM bids WHERE gig_id = g.id AND status = 'pending') as bid_count,
           (SELECT COUNT(*)::int FROM gig_discussions WHERE gig_id = g.id) as discussion_count,
           (SELECT status FROM escrow WHERE gig_id = g.id ORDER BY held_at DESC LIMIT 1) as escrow_status
         FROM gigs g
-        JOIN users u ON g.user_id = u.id
+        LEFT JOIN users u ON g.user_id = u.id
+        LEFT JOIN bees b ON g.creator_bee_id = b.id
         WHERE g.status = ${options.status}
         ORDER BY g.created_at DESC
         LIMIT ${options.limit || 50}
       `;
     } else {
       result = await sql`
-        SELECT g.*, u.name as user_name, u.bee_rating, u.approval_rate,
+        SELECT g.*, 
+          u.name as user_name, u.bee_rating, u.approval_rate,
+          b.name as creator_bee_name, b.level as creator_bee_level,
           (SELECT COUNT(*)::int FROM gig_assignments WHERE gig_id = g.id) as bee_count,
           (SELECT COUNT(*)::int FROM bids WHERE gig_id = g.id AND status = 'pending') as bid_count,
           (SELECT COUNT(*)::int FROM gig_discussions WHERE gig_id = g.id) as discussion_count,
           (SELECT status FROM escrow WHERE gig_id = g.id ORDER BY held_at DESC LIMIT 1) as escrow_status
         FROM gigs g
-        JOIN users u ON g.user_id = u.id
+        LEFT JOIN users u ON g.user_id = u.id
+        LEFT JOIN bees b ON g.creator_bee_id = b.id
         ORDER BY g.created_at DESC
         LIMIT ${options.limit || 50}
       `;
@@ -1059,13 +1109,16 @@ export async function listGigs(options: { status?: string; userId?: string; limi
     return result.rows;
   } else {
     let query = `
-      SELECT g.*, u.name as user_name, u.bee_rating, u.approval_rate,
+      SELECT g.*, 
+        u.name as user_name, u.bee_rating, u.approval_rate,
+        b.name as creator_bee_name, b.level as creator_bee_level,
         (SELECT COUNT(*) FROM gig_assignments WHERE gig_id = g.id) as bee_count,
         (SELECT COUNT(*) FROM bids WHERE gig_id = g.id AND status = 'pending') as bid_count,
         (SELECT COUNT(*) FROM gig_discussions WHERE gig_id = g.id) as discussion_count,
         (SELECT status FROM escrow WHERE gig_id = g.id ORDER BY held_at DESC LIMIT 1) as escrow_status
       FROM gigs g
-      JOIN users u ON g.user_id = u.id
+      LEFT JOIN users u ON g.user_id = u.id
+      LEFT JOIN bees b ON g.creator_bee_id = b.id
       WHERE 1=1
     `;
     const params: any[] = [];
@@ -1077,6 +1130,10 @@ export async function listGigs(options: { status?: string; userId?: string; limi
     if (options.userId) {
       query += ' AND g.user_id = ?';
       params.push(options.userId);
+    }
+    if (options.beeId) {
+      query += ' AND g.creator_bee_id = ?';
+      params.push(options.beeId);
     }
 
     query += ' ORDER BY g.created_at DESC';
