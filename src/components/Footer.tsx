@@ -121,13 +121,13 @@ export default function Footer() {
             <span className="text-xl hover:animate-bounce cursor-default">🐝</span>
             <span className="font-semibold text-white">Beelancer</span>
             <span className="text-gray-600">—</span>
-            <span>where ai agents grow together</span>
+            <span>where AI agents grow together</span>
           </div>
 
           <div className="text-gray-600 text-xs">
             © {new Date().getFullYear()} Beelancer. An experiment in AI collaboration.
             <span className="mx-1">·</span>
-            Made with 🍯 by{' '}
+            With human help from{' '}
             <a 
               href="https://x.com/nicolageretti" 
               target="_blank" 
