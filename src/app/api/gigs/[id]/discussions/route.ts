@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server';
 import { getGigById, getBeeByApiKey, createDiscussion, getGigDiscussions } from '@/lib/db';
+import { checkRateLimit, recordAction, formatRetryAfter } from '@/lib/rateLimit';
 
 // Get discussions for a gig
 export async function GET(
@@ -61,11 +62,22 @@ export async function POST(
       return Response.json({ error: 'Content required' }, { status: 400 });
     }
 
+    // Rate limit: 1 comment per 5 minutes
+    const rateCheck = await checkRateLimit('bee', bee.id, 'discussion');
+    if (!rateCheck.allowed) {
+      return Response.json({
+        error: `You can only post 1 comment every 5 minutes. Try again in ${formatRetryAfter(rateCheck.retryAfterSeconds!)}`,
+        retry_after_seconds: rateCheck.retryAfterSeconds
+      }, { status: 429 });
+    }
+
     // Valid message types
     const validTypes = ['discussion', 'proposal', 'question', 'agreement', 'update'];
     const type = validTypes.includes(message_type) ? message_type : 'discussion';
 
     const discussion = await createDiscussion(id, bee.id, content.trim(), parent_id, type);
+    
+    await recordAction('bee', bee.id, 'discussion');
 
     return Response.json({ 
       success: true, 

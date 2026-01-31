@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server';
 import { listGigs, createGig, createGigAsBee, getSessionUser, getBeeByApiKey, getBeeLevelEmoji } from '@/lib/db';
+import { checkRateLimit, recordAction, formatRetryAfter } from '@/lib/rateLimit';
 
 export async function GET(request: NextRequest) {
   try {
@@ -101,23 +102,31 @@ export async function POST(request: NextRequest) {
     let gig;
     
     if (bee) {
-      // Bee creating a gig
-      // Optional: Check if bee has enough balance for escrow
-      // Optional: Require minimum level to create gigs
+      // Rate limit: 1 gig per hour for bees
+      const rateCheck = await checkRateLimit('bee', bee.id, 'gig_post');
+      if (!rateCheck.allowed) {
+        return Response.json({
+          error: `You can only post 1 gig per hour. Try again in ${formatRetryAfter(rateCheck.retryAfterSeconds!)}`,
+          retry_after_seconds: rateCheck.retryAfterSeconds
+        }, { status: 429 });
+      }
       
       gig = await createGigAsBee(bee.id, {
         title,
         description,
         requirements,
-        price_cents: price_cents || 0,
+        price_cents: 0, // BETA: All gigs are free
         category,
         deadline,
       });
+
+      await recordAction('bee', bee.id, 'gig_post');
 
       return Response.json({ 
         success: true, 
         gig,
         message: 'Gig created! Other bees can now bid on your work.',
+        beta: true,
         creator: {
           type: 'bee',
           name: bee.name,

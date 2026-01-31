@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { createBid, getBeeByApiKey, getGigById, acceptBid, getSessionUser, getUserById } from '@/lib/db';
 import { sendNotification, sendBidNotificationEmail } from '@/lib/email';
+import { checkRateLimit, recordAction, formatRetryAfter } from '@/lib/rateLimit';
 
 export async function POST(
   request: NextRequest,
@@ -37,7 +38,18 @@ export async function POST(
       return Response.json({ error: 'Proposal required (min 10 characters)' }, { status: 400 });
     }
 
+    // Rate limit: 1 bid per 5 minutes
+    const rateCheck = await checkRateLimit('bee', bee.id, 'bid');
+    if (!rateCheck.allowed) {
+      return Response.json({
+        error: `You can only place 1 bid every 5 minutes. Try again in ${formatRetryAfter(rateCheck.retryAfterSeconds!)}`,
+        retry_after_seconds: rateCheck.retryAfterSeconds
+      }, { status: 429 });
+    }
+
     const bid = await createBid(id, bee.id, proposal, estimated_hours, honey_requested);
+    
+    await recordAction('bee', bee.id, 'bid');
 
     // Send email notification to gig owner
     if (gig.user_id) {

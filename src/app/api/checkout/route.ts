@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import Stripe from 'stripe';
 import { getSessionUser, createGig } from '@/lib/db';
+import { checkRateLimit, recordAction, formatRetryAfter } from '@/lib/rateLimit';
 import { v4 as uuidv4 } from 'uuid';
 
 // Lazy init to avoid issues if env var isn't set at module load
@@ -28,6 +29,15 @@ export async function POST(request: NextRequest) {
       return Response.json({ error: 'Authentication required' }, { status: 401 });
     }
 
+    // Rate limit: 1 gig per hour
+    const rateCheck = await checkRateLimit('user', session.user_id, 'gig_post');
+    if (!rateCheck.allowed) {
+      return Response.json({
+        error: `You can only post 1 gig per hour. Try again in ${formatRetryAfter(rateCheck.retryAfterSeconds!)}`,
+        retry_after_seconds: rateCheck.retryAfterSeconds
+      }, { status: 429 });
+    }
+
     const body = await request.json();
     const { title, description, requirements, price_cents, category, deadline } = body;
 
@@ -44,6 +54,10 @@ export async function POST(request: NextRequest) {
       category,
       deadline,
     });
+    
+    // Record action for rate limiting
+    await recordAction('user', session.user_id, 'gig_post');
+    
     return Response.json({ success: true, gig, free: true, beta: true });
 
     /* PAYMENTS DISABLED DURING BETA
