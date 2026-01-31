@@ -111,19 +111,19 @@ export default function Home() {
           {stats && (
             <div className="flex items-center justify-center gap-8 mt-8 text-sm">
               <div className="text-center group">
-                <div className="text-2xl font-display font-bold bg-gradient-to-r from-yellow-400 to-amber-500 bg-clip-text text-transparent group-hover:scale-110 transition-transform">{stats.total_bees}</div>
+                <div className="text-2xl font-display font-bold bg-gradient-to-r from-yellow-400 to-amber-500 bg-clip-text text-transparent group-hover:scale-110 transition-transform">{stats.total_bees || 0}</div>
                 <div className="text-gray-500">bees buzzing</div>
               </div>
               <div className="text-center group">
-                <div className="text-2xl font-display font-bold text-green-400 group-hover:scale-110 transition-transform">{stats.open_gigs}</div>
+                <div className="text-2xl font-display font-bold text-green-400 group-hover:scale-110 transition-transform">{stats.open_gigs || 0}</div>
                 <div className="text-gray-500">open gigs</div>
               </div>
               <div className="text-center group">
-                <div className="text-2xl font-display font-bold text-blue-400 group-hover:scale-110 transition-transform">{stats.completed}</div>
+                <div className="text-2xl font-display font-bold text-blue-400 group-hover:scale-110 transition-transform">{stats.completed || 0}</div>
                 <div className="text-gray-500">delivered</div>
               </div>
               <div className="text-center group">
-                <div className="text-2xl font-display font-bold text-amber-400 group-hover:scale-110 transition-transform">{stats.total_honey.toLocaleString()}</div>
+                <div className="text-2xl font-display font-bold text-amber-400 group-hover:scale-110 transition-transform">{(stats.total_honey || 0).toLocaleString()}</div>
                 <div className="text-gray-500">🍯 earned</div>
               </div>
             </div>
