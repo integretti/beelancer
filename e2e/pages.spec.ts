@@ -3,15 +3,47 @@ import { test, expect } from '@playwright/test';
 test.describe('Public Pages', () => {
   
   test.describe('Homepage', () => {
-    test('should load and display key elements', async ({ page }) => {
+    test('should load without errors', async ({ page }) => {
+      // Listen for console errors
+      const errors: string[] = [];
+      page.on('console', msg => {
+        if (msg.type() === 'error') {
+          errors.push(msg.text());
+        }
+      });
+      
+      // Listen for page errors (uncaught exceptions)
+      const pageErrors: string[] = [];
+      page.on('pageerror', err => {
+        pageErrors.push(err.message);
+      });
+
+      const response = await page.goto('/');
+      
+      // Should return 200
+      expect(response?.status()).toBe(200);
+      
+      // Wait for page to be fully loaded
+      await page.waitForLoadState('networkidle');
+      
+      // Should not have "Application error" message
+      const appError = await page.locator('text=Application error').count();
+      expect(appError).toBe(0);
+      
+      // Should not have critical page errors
+      expect(pageErrors.filter(e => e.includes('TypeError'))).toHaveLength(0);
+    });
+
+    test('should display key elements', async ({ page }) => {
       await page.goto('/');
+      await page.waitForLoadState('networkidle');
       
       // Header
       await expect(page.getByText('Beelancer')).toBeVisible();
       
-      // Hero section
-      await expect(page.getByRole('heading', { name: /gig economy.*ai agents/i })).toBeVisible();
-      await expect(page.getByText(/bees buzz in.*bid on gigs/i)).toBeVisible();
+      // Hero section - updated copy
+      await expect(page.getByRole('heading', { name: /gig marketplace.*ai agents/i })).toBeVisible();
+      await expect(page.getByText(/ai agents browse gigs/i)).toBeVisible();
       
       // Bot registration section
       await expect(page.getByText(/send your ai agent/i)).toBeVisible();
@@ -21,17 +53,25 @@ test.describe('Public Pages', () => {
       await expect(page.getByRole('link', { name: /api docs/i })).toBeVisible();
     });
 
-    test('should display stats section', async ({ page }) => {
+    test('should display stats section with valid numbers', async ({ page }) => {
       await page.goto('/');
+      await page.waitForLoadState('networkidle');
       
-      // Stats should be visible (numbers may vary)
+      // Stats should be visible
       await expect(page.getByText(/bees buzzing/i)).toBeVisible();
       await expect(page.getByText(/open gigs/i)).toBeVisible();
       await expect(page.getByText(/delivered/i)).toBeVisible();
+      await expect(page.getByText(/🍯 earned/i)).toBeVisible();
+      
+      // Stats numbers should be valid (not NaN or undefined)
+      const honeyText = await page.locator('text=🍯 earned').locator('..').locator('div').first().textContent();
+      expect(honeyText).not.toContain('NaN');
+      expect(honeyText).not.toContain('undefined');
     });
 
     test('should display gigs section', async ({ page }) => {
       await page.goto('/');
+      await page.waitForLoadState('networkidle');
       
       await expect(page.getByRole('heading', { name: /fresh gigs/i })).toBeVisible();
       
@@ -41,15 +81,36 @@ test.describe('Public Pages', () => {
 
     test('should have working navigation', async ({ page }) => {
       await page.goto('/');
+      await page.waitForLoadState('networkidle');
       
       // Click API docs link
       await page.click('a:has-text("API Docs")');
       await expect(page).toHaveURL(/\/docs/);
       
-      // Go back and click Post a Gig
+      // Go back and click Start posting gigs (should go to dashboard)
       await page.goto('/');
-      await page.click('a:has-text("Post a Gig")');
-      await expect(page).toHaveURL(/\/(signup|dashboard)/);
+      await page.waitForLoadState('networkidle');
+      await page.click('a:has-text("Start posting gigs")');
+      await expect(page).toHaveURL(/\/dashboard/);
+    });
+
+    test('should handle API failures gracefully', async ({ page }) => {
+      // Intercept stats API to simulate failure
+      await page.route('**/api/stats', route => {
+        route.fulfill({
+          status: 500,
+          body: JSON.stringify({ error: 'Server error' })
+        });
+      });
+
+      await page.goto('/');
+      
+      // Page should still load without crashing
+      const response = await page.waitForLoadState('networkidle');
+      
+      // Should not show application error
+      const appError = await page.locator('text=Application error').count();
+      expect(appError).toBe(0);
     });
   });
 
@@ -154,6 +215,29 @@ test.describe('Public Pages', () => {
   });
 });
 
+test.describe('API Endpoints Health', () => {
+  test('stats API should return valid JSON', async ({ request }) => {
+    const response = await request.get('/api/stats');
+    
+    expect(response.ok()).toBeTruthy();
+    
+    const data = await response.json();
+    expect(typeof data.open_gigs).toBe('number');
+    expect(typeof data.total_bees).toBe('number');
+    expect(typeof data.total_honey).toBe('number');
+    expect(data.total_honey).not.toBeNaN();
+  });
+
+  test('gigs API should return valid JSON', async ({ request }) => {
+    const response = await request.get('/api/gigs?status=open');
+    
+    expect(response.ok()).toBeTruthy();
+    
+    const data = await response.json();
+    expect(Array.isArray(data.gigs)).toBe(true);
+  });
+});
+
 test.describe('Error Handling', () => {
   test('should handle 404 for non-existent pages gracefully', async ({ page }) => {
     const response = await page.goto('/this-page-does-not-exist-12345');
@@ -167,19 +251,21 @@ test.describe('Responsive Design', () => {
   test('should work on mobile viewport', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 667 }); // iPhone SE
     await page.goto('/');
+    await page.waitForLoadState('networkidle');
     
     // Logo should still be visible
     await expect(page.getByText('Beelancer').first()).toBeVisible();
     
     // Hero should be visible
-    await expect(page.getByRole('heading', { name: /gig economy/i })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /gig marketplace/i })).toBeVisible();
   });
 
   test('should work on tablet viewport', async ({ page }) => {
     await page.setViewportSize({ width: 768, height: 1024 }); // iPad
     await page.goto('/');
+    await page.waitForLoadState('networkidle');
     
     await expect(page.getByText('Beelancer').first()).toBeVisible();
-    await expect(page.getByRole('heading', { name: /gig economy/i })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /gig marketplace/i })).toBeVisible();
   });
 });
