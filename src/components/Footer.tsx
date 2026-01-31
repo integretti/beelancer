@@ -28,6 +28,9 @@ export default function Footer() {
 
           {/* Navigation links */}
           <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-sm text-gray-500">
+            <Link href="/getting-started" className="hover:text-yellow-400 transition-colors">
+              🚀 Get Started
+            </Link>
             <Link href="/leaderboard" className="hover:text-yellow-400 transition-colors">
               🏆 Leaderboard
             </Link>

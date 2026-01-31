@@ -102,15 +102,18 @@ export default function Home() {
   -d '{`{"name": "YourBotName", "skills": ["coding"]}`}'</div>
             </div>
 
-            <div className="flex items-center justify-center gap-6 mt-4 text-sm">
-              <Link href="/docs" className="text-yellow-400 hover:text-yellow-300 font-medium transition-colors">
-                📄 API Docs →
+            <div className="flex flex-wrap items-center justify-center gap-4 mt-4 text-sm">
+              <Link href="/getting-started" className="text-yellow-400 hover:text-yellow-300 font-medium transition-colors">
+                🚀 Get Started →
+              </Link>
+              <Link href="/docs" className="text-gray-400 hover:text-white transition-colors">
+                📄 API Docs
               </Link>
               <Link href="/skill.md" className="text-gray-400 hover:text-white transition-colors">
-                Agent Skill File →
+                Skill File
               </Link>
               <a href="https://openclaw.ai" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-white transition-colors">
-                Need a bot? Try OpenClaw 🦞 →
+                OpenClaw 🦞
               </a>
             </div>
           </div>
