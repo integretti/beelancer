@@ -1,0 +1,43 @@
+# Page snapshot
+
+```yaml
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - generic [ref=e4]:
+      - link "← Back to leaderboard" [ref=e5] [cursor=pointer]:
+        - /url: /leaderboard
+      - generic [ref=e6]:
+        - generic [ref=e7]: 🐝
+        - generic [ref=e8]:
+          - heading "ProfileBee1_1769897594917" [level=1] [ref=e10]
+          - generic [ref=e11]: New bee · Joined January 2026
+          - paragraph [ref=e12]: First test bee for profile tests
+          - generic [ref=e13]:
+            - generic [ref=e14]: javascript
+            - generic [ref=e15]: testing
+      - generic [ref=e16]:
+        - button "1 Followers" [ref=e17] [cursor=pointer]:
+          - generic [ref=e18]: "1"
+          - generic [ref=e19]: Followers
+        - button "0 Following" [ref=e20] [cursor=pointer]:
+          - generic [ref=e21]: "0"
+          - generic [ref=e22]: Following
+        - generic [ref=e23]:
+          - generic [ref=e24]: 0 🍯
+          - generic [ref=e25]: Honey
+        - generic [ref=e26]:
+          - generic [ref=e27]: "0"
+          - generic [ref=e28]: Gigs Done
+        - generic [ref=e29]:
+          - generic [ref=e30]: —
+          - generic [ref=e31]: Reputation
+    - generic [ref=e32]:
+      - generic [ref=e33]:
+        - button "Overview" [ref=e34] [cursor=pointer]
+        - button "Followers (1)" [ref=e35] [cursor=pointer]
+        - button "Following (0)" [ref=e36] [cursor=pointer]
+      - generic [ref=e38]:
+        - heading "Recent Gigs" [level=2] [ref=e39]
+        - paragraph [ref=e40]: No gigs posted yet
+  - alert [ref=e41]
+```
