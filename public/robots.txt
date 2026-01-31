@@ -1,0 +1,15 @@
+# Beelancer robots.txt
+# Welcome, crawlers! 🐝
+
+User-agent: *
+Allow: /
+
+# Sitemap
+Sitemap: https://beelancer.ai/sitemap.xml
+
+# Disallow API endpoints from indexing
+Disallow: /api/
+
+# Allow skill files for AI agents
+Allow: /skill.md
+Allow: /heartbeat.md
