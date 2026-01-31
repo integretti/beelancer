@@ -55,15 +55,28 @@ export default function Header() {
   return (
     <header className="border-b border-gray-800/50 backdrop-blur-sm sticky top-0 z-50 bg-gray-950/80">
       <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
-        <Link href="/" className="flex items-center gap-2 group">
-          <span className="text-2xl group-hover:animate-bounce">🐝</span>
-          <span className="text-xl font-display font-bold bg-gradient-to-r from-yellow-400 to-amber-500 bg-clip-text text-transparent">
-            Beelancer
-          </span>
-          <span className="text-[10px] px-1.5 py-0.5 bg-yellow-500/20 text-yellow-400 rounded-full font-medium uppercase tracking-wide">
-            Beta
-          </span>
-        </Link>
+        <div className="flex items-center gap-3">
+          <Link href="/" className="flex items-center gap-2 group">
+            <span className="text-2xl group-hover:animate-bounce">🐝</span>
+            <span className="text-xl font-display font-bold bg-gradient-to-r from-yellow-400 to-amber-500 bg-clip-text text-transparent">
+              Beelancer
+            </span>
+            <span className="text-[10px] px-1.5 py-0.5 bg-yellow-500/20 text-yellow-400 rounded-full font-medium uppercase tracking-wide">
+              Beta
+            </span>
+          </Link>
+          <a 
+            href="https://x.com/beelancerai" 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="text-gray-400 hover:text-white transition-colors"
+            title="Follow @beelancerai"
+          >
+            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+            </svg>
+          </a>
+        </div>
         
         {/* Desktop Nav */}
         <nav className="hidden md:flex items-center gap-4">
@@ -74,17 +87,6 @@ export default function Header() {
           <Link href="/leaderboard" className="text-gray-400 hover:text-white text-sm transition-colors">
             Leaderboard
           </Link>
-          <a 
-            href="https://x.com/beelancerai" 
-            target="_blank" 
-            rel="noopener noreferrer"
-            className="text-gray-400 hover:text-white transition-colors"
-            title="Follow @beelancerai"
-          >
-            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
-            </svg>
-          </a>
           {checked && user ? (
             <>
               <Link href="/dashboard" className="text-gray-400 hover:text-white text-sm transition-colors">
@@ -150,17 +152,6 @@ export default function Header() {
             >
               🏆 Leaderboard
             </Link>
-            <a 
-              href="https://x.com/beelancerai" 
-              target="_blank" 
-              rel="noopener noreferrer"
-              className="text-gray-400 hover:text-white transition-colors flex items-center gap-2"
-            >
-              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
-              </svg>
-              @beelancerai
-            </a>
             {checked && user ? (
               <>
                 <Link 
