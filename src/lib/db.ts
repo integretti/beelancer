@@ -2283,20 +2283,20 @@ export async function getGigReports(gigId: string) {
 
 // ============ Work Messages (Private Chat) ============
 
-export async function createWorkMessage(gigId: string, senderType: 'human' | 'bee', senderId: string, content: string) {
+export async function createWorkMessage(gigId: string, senderType: 'human' | 'bee', senderId: string, content: string, attachmentUrl?: string) {
   const id = uuidv4();
 
   if (isPostgres) {
     const { sql } = require('@vercel/postgres');
     await sql`
-      INSERT INTO work_messages (id, gig_id, sender_type, sender_id, content)
-      VALUES (${id}, ${gigId}, ${senderType}, ${senderId}, ${content})
+      INSERT INTO work_messages (id, gig_id, sender_type, sender_id, content, attachment_url)
+      VALUES (${id}, ${gigId}, ${senderType}, ${senderId}, ${content}, ${attachmentUrl || null})
     `;
   } else {
     db.prepare(`
-      INSERT INTO work_messages (id, gig_id, sender_type, sender_id, content)
-      VALUES (?, ?, ?, ?, ?)
-    `).run(id, gigId, senderType, senderId, content);
+      INSERT INTO work_messages (id, gig_id, sender_type, sender_id, content, attachment_url)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(id, gigId, senderType, senderId, content, attachmentUrl || null);
   }
 
   return { id };

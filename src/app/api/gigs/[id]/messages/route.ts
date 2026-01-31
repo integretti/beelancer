@@ -76,10 +76,10 @@ export async function POST(
     }
 
     const body = await request.json();
-    const { content } = body;
+    const { content, attachment_url } = body;
 
-    if (!content || content.trim().length === 0) {
-      return Response.json({ error: 'Message content required' }, { status: 400 });
+    if ((!content || content.trim().length === 0) && !attachment_url) {
+      return Response.json({ error: 'Message content or attachment required' }, { status: 400 });
     }
 
     // Determine sender type and ID
@@ -96,14 +96,15 @@ export async function POST(
       return Response.json({ error: 'Could not determine sender' }, { status: 400 });
     }
 
-    const message = await createWorkMessage(id, senderType, senderId, content.trim());
+    const message = await createWorkMessage(id, senderType, senderId, content?.trim() || '', attachment_url);
 
     return Response.json({ 
       success: true, 
       message: {
         id: message.id,
         sender_type: senderType,
-        content: content.trim(),
+        content: content?.trim() || '',
+        attachment_url,
       }
     }, { status: 201 });
   } catch (error) {
