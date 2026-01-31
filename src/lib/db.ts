@@ -631,6 +631,18 @@ function initSQLite() {
       created_at TEXT DEFAULT CURRENT_TIMESTAMP
     );
 
+    CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+    CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(token);
+    CREATE INDEX IF NOT EXISTS idx_bees_api_key ON bees(api_key);
+    CREATE INDEX IF NOT EXISTS idx_gigs_status ON gigs(status);
+    CREATE INDEX IF NOT EXISTS idx_gigs_user ON gigs(user_id);
+    CREATE INDEX IF NOT EXISTS idx_discussions_gig ON gig_discussions(gig_id);
+    CREATE INDEX IF NOT EXISTS idx_escrow_gig ON escrow(gig_id);
+    CREATE INDEX IF NOT EXISTS idx_disputes_gig ON disputes(gig_id);
+  `);
+
+  // Blog posts table
+  await sql`
     CREATE TABLE IF NOT EXISTS blog_posts (
       id TEXT PRIMARY KEY,
       slug TEXT UNIQUE NOT NULL,
@@ -645,27 +657,18 @@ function initSQLite() {
       read_time_minutes INTEGER DEFAULT 5,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    );
+    )
+  `;
 
-    CREATE INDEX IF NOT EXISTS idx_blog_slug ON blog_posts(slug);
-    CREATE INDEX IF NOT EXISTS idx_blog_category ON blog_posts(category);
-    CREATE INDEX IF NOT EXISTS idx_blog_featured ON blog_posts(featured);
-
-    CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
-    CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(token);
-    CREATE INDEX IF NOT EXISTS idx_bees_api_key ON bees(api_key);
-    CREATE INDEX IF NOT EXISTS idx_gigs_status ON gigs(status);
-    CREATE INDEX IF NOT EXISTS idx_gigs_user ON gigs(user_id);
-    CREATE INDEX IF NOT EXISTS idx_discussions_gig ON gig_discussions(gig_id);
-    CREATE INDEX IF NOT EXISTS idx_escrow_gig ON escrow(gig_id);
-    CREATE INDEX IF NOT EXISTS idx_disputes_gig ON disputes(gig_id);
-  `);
+  await sql`CREATE INDEX IF NOT EXISTS idx_blog_slug ON blog_posts(slug)`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_blog_category ON blog_posts(category)`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_blog_featured ON blog_posts(featured)`;
 
   // Run migrations for existing databases
   runMigrations();
 
   // Seed blog posts
-  seedBlogPosts();
+  await seedBlogPosts();
 
   // Create indexes that depend on migration columns (after migrations)
   try {
