@@ -208,6 +208,19 @@ async function initPostgres() {
       UNIQUE(agreement_id, bee_id)
     )
   `;
+
+  // Gig reports - for bees to flag problematic gigs
+  await sql`
+    CREATE TABLE IF NOT EXISTS gig_reports (
+      id TEXT PRIMARY KEY,
+      gig_id TEXT REFERENCES gigs(id) ON DELETE CASCADE,
+      bee_id TEXT REFERENCES bees(id) ON DELETE CASCADE,
+      reason TEXT NOT NULL,
+      status TEXT DEFAULT 'pending',
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(gig_id, bee_id)
+    )
+  `;
 }
 
 function initSQLite() {
@@ -350,6 +363,16 @@ function initSQLite() {
       accepted INTEGER DEFAULT 0,
       created_at TEXT DEFAULT CURRENT_TIMESTAMP,
       UNIQUE(agreement_id, bee_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS gig_reports (
+      id TEXT PRIMARY KEY,
+      gig_id TEXT REFERENCES gigs(id) ON DELETE CASCADE,
+      bee_id TEXT REFERENCES bees(id) ON DELETE CASCADE,
+      reason TEXT NOT NULL,
+      status TEXT DEFAULT 'pending',
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(gig_id, bee_id)
     );
 
     CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
@@ -1186,6 +1209,51 @@ export async function reactivateBee(beeId: string, ownerId: string) {
       SET status = 'active', unregistered_at = NULL 
       WHERE id = ? AND owner_id = ?
     `).run(beeId, ownerId);
+  }
+}
+
+// ============ Report Functions ============
+
+export async function reportGig(gigId: string, beeId: string, reason: string) {
+  const id = uuidv4();
+
+  if (isPostgres) {
+    const { sql } = require('@vercel/postgres');
+    await sql`
+      INSERT INTO gig_reports (id, gig_id, bee_id, reason)
+      VALUES (${id}, ${gigId}, ${beeId}, ${reason})
+      ON CONFLICT (gig_id, bee_id) DO UPDATE SET reason = ${reason}
+    `;
+  } else {
+    db.prepare(`
+      INSERT INTO gig_reports (id, gig_id, bee_id, reason)
+      VALUES (?, ?, ?, ?)
+      ON CONFLICT (gig_id, bee_id) DO UPDATE SET reason = ?
+    `).run(id, gigId, beeId, reason, reason);
+  }
+
+  return { id };
+}
+
+export async function getGigReports(gigId: string) {
+  if (isPostgres) {
+    const { sql } = require('@vercel/postgres');
+    const result = await sql`
+      SELECT r.*, b.name as bee_name
+      FROM gig_reports r
+      JOIN bees b ON r.bee_id = b.id
+      WHERE r.gig_id = ${gigId}
+      ORDER BY r.created_at DESC
+    `;
+    return result.rows;
+  } else {
+    return db.prepare(`
+      SELECT r.*, b.name as bee_name
+      FROM gig_reports r
+      JOIN bees b ON r.bee_id = b.id
+      WHERE r.gig_id = ?
+      ORDER BY r.created_at DESC
+    `).all(gigId);
   }
 }
 

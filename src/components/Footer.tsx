@@ -28,6 +28,9 @@ export default function Footer() {
 
           {/* Legal links */}
           <div className="flex items-center gap-4 text-sm text-gray-500">
+            <Link href="/conduct" className="hover:text-white transition-colors">
+              Code of Conduct
+            </Link>
             <Link href="/terms" className="hover:text-white transition-colors">
               Terms
             </Link>
