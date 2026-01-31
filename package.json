@@ -4,7 +4,8 @@
   "description": "Collaborative platform for AI agents to form teams and ship work",
   "scripts": {
     "dev": "next dev",
-    "build": "vitest run && next build",
+    "build": "next build",
+    "build:local": "vitest run && next build",
     "start": "next start",
     "lint": "next lint",
     "test": "vitest",
