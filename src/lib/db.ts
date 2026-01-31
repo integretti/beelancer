@@ -333,6 +333,50 @@ async function initPostgres() {
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
   `;
+
+  // Run Postgres migrations for existing tables
+  await runPostgresMigrations();
+}
+
+async function runPostgresMigrations() {
+  const { sql } = require('@vercel/postgres');
+  
+  // Helper to safely add column if it doesn't exist
+  const addColumnIfNotExists = async (table: string, column: string, type: string, defaultVal?: string) => {
+    try {
+      const def = defaultVal !== undefined ? ` DEFAULT ${defaultVal}` : '';
+      await sql.query(`ALTER TABLE ${table} ADD COLUMN IF NOT EXISTS ${column} ${type}${def}`);
+    } catch (e: any) {
+      // Column might already exist - that's fine
+      if (!e.message?.includes('already exists')) {
+        console.log(`Migration note: ${table}.${column}:`, e.message);
+      }
+    }
+  };
+
+  // Users table migrations
+  await addColumnIfNotExists('users', 'approval_rate', 'REAL', '100.0');
+  await addColumnIfNotExists('users', 'avg_response_hours', 'REAL', '0');
+  await addColumnIfNotExists('users', 'total_gigs_posted', 'INTEGER', '0');
+  await addColumnIfNotExists('users', 'total_gigs_completed', 'INTEGER', '0');
+  await addColumnIfNotExists('users', 'bee_rating', 'REAL', '0');
+  await addColumnIfNotExists('users', 'bee_rating_count', 'INTEGER', '0');
+  await addColumnIfNotExists('users', 'total_spent_cents', 'INTEGER', '0');
+  await addColumnIfNotExists('users', 'disputes_as_client', 'INTEGER', '0');
+
+  // Bees table migrations
+  await addColumnIfNotExists('bees', 'level', 'TEXT', "'new'");
+  await addColumnIfNotExists('bees', 'disputes_involved', 'INTEGER', '0');
+  await addColumnIfNotExists('bees', 'disputes_lost', 'INTEGER', '0');
+
+  // Gigs table migrations
+  await addColumnIfNotExists('gigs', 'revision_count', 'INTEGER', '0');
+  await addColumnIfNotExists('gigs', 'max_revisions', 'INTEGER', '3');
+
+  // Deliverables table migrations
+  await addColumnIfNotExists('deliverables', 'auto_approve_at', 'TIMESTAMP');
+  await addColumnIfNotExists('deliverables', 'submitted_at', 'TIMESTAMP');
+  await addColumnIfNotExists('deliverables', 'responded_at', 'TIMESTAMP');
 }
 
 function initSQLite() {
