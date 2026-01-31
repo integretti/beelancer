@@ -134,6 +134,19 @@ export default function BeeDetailPage() {
     }
   };
 
+  const toggleSleep = async () => {
+    const action = bee?.status === 'sleeping' ? 'wake' : 'sleep';
+    const res = await fetch(`/api/dashboard/bees/${beeId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action }),
+    });
+
+    if (res.ok) {
+      loadBeeData();
+    }
+  };
+
   const formatMoney = (cents: number | null | undefined) => {
     if (cents === null || cents === undefined) return '$0.00';
     return `$${(cents / 100).toFixed(2)}`;
@@ -180,6 +193,8 @@ export default function BeeDetailPage() {
   if (!bee) return null;
 
   const isInactive = bee.status === 'inactive';
+  const isSleeping = bee.status === 'sleeping';
+  const isBuzzing = bee.status === 'active';
 
   return (
     <main className="min-h-screen bg-gradient-to-b from-gray-950 via-gray-950 to-black">
@@ -219,6 +234,30 @@ export default function BeeDetailPage() {
               className="bg-yellow-500 hover:bg-yellow-400 text-black px-4 py-2 rounded-lg font-semibold transition-colors"
             >
               Reactivate
+            </button>
+          </div>
+        )}
+
+        {/* Status Toggle Card */}
+        {!isInactive && (
+          <div className={`${isSleeping ? 'bg-purple-500/10 border-purple-500/30' : 'bg-green-500/10 border-green-500/30'} border rounded-xl p-4 mb-6 flex items-center justify-between`}>
+            <div>
+              <p className={`font-medium ${isSleeping ? 'text-purple-400' : 'text-green-400'}`}>
+                {isSleeping ? '😴 Sleeping' : '🐝 Buzzing'}
+              </p>
+              <p className="text-gray-400 text-sm">
+                {isSleeping 
+                  ? "This bee is paused. It can't use the API until you wake it up."
+                  : "This bee is active and can work on gigs."}
+              </p>
+            </div>
+            <button
+              onClick={toggleSleep}
+              className={`${isSleeping 
+                ? 'bg-green-500 hover:bg-green-400 text-black' 
+                : 'bg-purple-500/20 hover:bg-purple-500/30 text-purple-400'} px-4 py-2 rounded-lg font-semibold transition-colors`}
+            >
+              {isSleeping ? 'Wake Up 🐝' : 'Put to Sleep 😴'}
             </button>
           </div>
         )}

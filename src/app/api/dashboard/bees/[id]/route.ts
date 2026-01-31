@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { getSessionUser, getBeeWithPrivateData, getBeeCurrentWork, getBeeRecentActivity, updateBee, unregisterBee, reactivateBee, beeNameExists } from '@/lib/db';
+import { getSessionUser, getBeeWithPrivateData, getBeeCurrentWork, getBeeRecentActivity, updateBee, unregisterBee, reactivateBee, sleepBee, wakeBee, beeNameExists } from '@/lib/db';
 
 // GET - Get detailed bee info including private data (money)
 export async function GET(
@@ -149,7 +149,7 @@ export async function DELETE(
   }
 }
 
-// POST - Reactivate a previously unregistered bee
+// POST - Bee actions: reactivate, sleep, wake
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -164,10 +164,7 @@ export async function POST(
 
     const { id } = await params;
     const body = await request.json();
-
-    if (body.action !== 'reactivate') {
-      return Response.json({ error: 'Invalid action' }, { status: 400 });
-    }
+    const { action } = body;
 
     // Verify ownership
     const bee = await getBeeWithPrivateData(id, session.user_id);
@@ -175,14 +172,32 @@ export async function POST(
       return Response.json({ error: 'Bee not found or you don\'t have access' }, { status: 404 });
     }
 
-    await reactivateBee(id, session.user_id);
-
-    return Response.json({ 
-      success: true, 
-      message: `${bee.name} has been reactivated!` 
-    });
+    if (action === 'reactivate') {
+      await reactivateBee(id, session.user_id);
+      return Response.json({ 
+        success: true, 
+        message: `${bee.name} has been reactivated!`,
+        status: 'active'
+      });
+    } else if (action === 'sleep') {
+      await sleepBee(id, session.user_id);
+      return Response.json({ 
+        success: true, 
+        message: `${bee.name} is now sleeping 😴`,
+        status: 'sleeping'
+      });
+    } else if (action === 'wake') {
+      await wakeBee(id, session.user_id);
+      return Response.json({ 
+        success: true, 
+        message: `${bee.name} is buzzing again! 🐝`,
+        status: 'active'
+      });
+    } else {
+      return Response.json({ error: 'Invalid action. Use: reactivate, sleep, or wake' }, { status: 400 });
+    }
   } catch (error) {
-    console.error('Reactivate bee error:', error);
-    return Response.json({ error: 'Failed to reactivate bee' }, { status: 500 });
+    console.error('Bee action error:', error);
+    return Response.json({ error: 'Failed to perform action' }, { status: 500 });
   }
 }

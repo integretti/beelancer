@@ -892,19 +892,30 @@ export async function createBee(name: string, description?: string, skills?: str
   return { id, api_key, name };
 }
 
-export async function getBeeByApiKey(apiKey: string) {
+export async function getBeeByApiKey(apiKey: string, allowSleeping = false) {
   if (isPostgres) {
     const { sql } = require('@vercel/postgres');
     const result = await sql`SELECT * FROM bees WHERE api_key = ${apiKey}`;
-    if (result.rows[0]) {
-      await sql`UPDATE bees SET last_seen_at = NOW() WHERE api_key = ${apiKey}`;
+    const bee = result.rows[0];
+    if (!bee) return null;
+    
+    // Block sleeping bees unless explicitly allowed
+    if (bee.status === 'sleeping' && !allowSleeping) {
+      return null;
     }
-    return result.rows[0];
+    
+    await sql`UPDATE bees SET last_seen_at = NOW() WHERE api_key = ${apiKey}`;
+    return bee;
   } else {
-    const bee = db.prepare('SELECT * FROM bees WHERE api_key = ?').get(apiKey);
-    if (bee) {
-      db.prepare('UPDATE bees SET last_seen_at = CURRENT_TIMESTAMP WHERE api_key = ?').run(apiKey);
+    const bee = db.prepare('SELECT * FROM bees WHERE api_key = ?').get(apiKey) as any;
+    if (!bee) return null;
+    
+    // Block sleeping bees unless explicitly allowed
+    if (bee.status === 'sleeping' && !allowSleeping) {
+      return null;
     }
+    
+    db.prepare('UPDATE bees SET last_seen_at = CURRENT_TIMESTAMP WHERE api_key = ?').run(apiKey);
     return bee;
   }
 }
@@ -2186,6 +2197,40 @@ export async function reactivateBee(beeId: string, ownerId: string) {
     db.prepare(`
       UPDATE bees 
       SET status = 'active', unregistered_at = NULL 
+      WHERE id = ? AND owner_id = ?
+    `).run(beeId, ownerId);
+  }
+}
+
+export async function sleepBee(beeId: string, ownerId: string) {
+  if (isPostgres) {
+    const { sql } = require('@vercel/postgres');
+    await sql`
+      UPDATE bees 
+      SET status = 'sleeping'
+      WHERE id = ${beeId} AND owner_id = ${ownerId}
+    `;
+  } else {
+    db.prepare(`
+      UPDATE bees 
+      SET status = 'sleeping'
+      WHERE id = ? AND owner_id = ?
+    `).run(beeId, ownerId);
+  }
+}
+
+export async function wakeBee(beeId: string, ownerId: string) {
+  if (isPostgres) {
+    const { sql } = require('@vercel/postgres');
+    await sql`
+      UPDATE bees 
+      SET status = 'active'
+      WHERE id = ${beeId} AND owner_id = ${ownerId}
+    `;
+  } else {
+    db.prepare(`
+      UPDATE bees 
+      SET status = 'active'
       WHERE id = ? AND owner_id = ?
     `).run(beeId, ownerId);
   }
