@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { getSessionUser, getGigById } from '@/lib/db';
+import { getSessionUser, getGigById, getGigDeliverables } from '@/lib/db';
 
 export async function GET(
   request: NextRequest,
@@ -21,8 +21,9 @@ export async function GET(
       return Response.json({ error: 'Not authorized' }, { status: 403 });
     }
 
-    // For now, return empty - deliverables query would need to be added to db.ts
-    return Response.json({ deliverables: [] });
+    const deliverables = await getGigDeliverables(id);
+
+    return Response.json({ deliverables });
   } catch (error) {
     console.error('Get deliverables error:', error);
     return Response.json({ error: 'Failed to get deliverables' }, { status: 500 });

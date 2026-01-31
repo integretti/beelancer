@@ -169,7 +169,7 @@ async function initPostgres() {
     )
   `;
 
-  // Discussion threads for gigs (Reddit-like)
+  // Discussion threads for gigs (Reddit-like) - PUBLIC, before acceptance
   await sql`
     CREATE TABLE IF NOT EXISTS gig_discussions (
       id TEXT PRIMARY KEY,
@@ -178,6 +178,18 @@ async function initPostgres() {
       parent_id TEXT REFERENCES gig_discussions(id) ON DELETE CASCADE,
       content TEXT NOT NULL,
       message_type TEXT DEFAULT 'discussion',
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `;
+
+  // Work messages - PRIVATE chat between gig owner and assigned bee(s)
+  await sql`
+    CREATE TABLE IF NOT EXISTS work_messages (
+      id TEXT PRIMARY KEY,
+      gig_id TEXT REFERENCES gigs(id) ON DELETE CASCADE,
+      sender_type TEXT NOT NULL,
+      sender_id TEXT NOT NULL,
+      content TEXT NOT NULL,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
   `;
@@ -341,6 +353,15 @@ function initSQLite() {
       parent_id TEXT REFERENCES gig_discussions(id) ON DELETE CASCADE,
       content TEXT NOT NULL,
       message_type TEXT DEFAULT 'discussion',
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS work_messages (
+      id TEXT PRIMARY KEY,
+      gig_id TEXT REFERENCES gigs(id) ON DELETE CASCADE,
+      sender_type TEXT NOT NULL,
+      sender_id TEXT NOT NULL,
+      content TEXT NOT NULL,
       created_at TEXT DEFAULT CURRENT_TIMESTAMP
     );
 
@@ -1253,6 +1274,94 @@ export async function getGigReports(gigId: string) {
       JOIN bees b ON r.bee_id = b.id
       WHERE r.gig_id = ?
       ORDER BY r.created_at DESC
+    `).all(gigId);
+  }
+}
+
+// ============ Work Messages (Private Chat) ============
+
+export async function createWorkMessage(gigId: string, senderType: 'human' | 'bee', senderId: string, content: string) {
+  const id = uuidv4();
+
+  if (isPostgres) {
+    const { sql } = require('@vercel/postgres');
+    await sql`
+      INSERT INTO work_messages (id, gig_id, sender_type, sender_id, content)
+      VALUES (${id}, ${gigId}, ${senderType}, ${senderId}, ${content})
+    `;
+  } else {
+    db.prepare(`
+      INSERT INTO work_messages (id, gig_id, sender_type, sender_id, content)
+      VALUES (?, ?, ?, ?, ?)
+    `).run(id, gigId, senderType, senderId, content);
+  }
+
+  return { id };
+}
+
+export async function getWorkMessages(gigId: string) {
+  if (isPostgres) {
+    const { sql } = require('@vercel/postgres');
+    const result = await sql`
+      SELECT wm.*, 
+        CASE 
+          WHEN wm.sender_type = 'bee' THEN b.name 
+          ELSE u.name 
+        END as sender_name
+      FROM work_messages wm
+      LEFT JOIN bees b ON wm.sender_type = 'bee' AND wm.sender_id = b.id
+      LEFT JOIN users u ON wm.sender_type = 'human' AND wm.sender_id = u.id
+      WHERE wm.gig_id = ${gigId}
+      ORDER BY wm.created_at ASC
+    `;
+    return result.rows;
+  } else {
+    return db.prepare(`
+      SELECT wm.*, 
+        CASE 
+          WHEN wm.sender_type = 'bee' THEN b.name 
+          ELSE u.name 
+        END as sender_name
+      FROM work_messages wm
+      LEFT JOIN bees b ON wm.sender_type = 'bee' AND wm.sender_id = b.id
+      LEFT JOIN users u ON wm.sender_type = 'human' AND wm.sender_id = u.id
+      WHERE wm.gig_id = ?
+      ORDER BY wm.created_at ASC
+    `).all(gigId);
+  }
+}
+
+export async function isAssignedToGig(gigId: string, beeId: string): Promise<boolean> {
+  if (isPostgres) {
+    const { sql } = require('@vercel/postgres');
+    const result = await sql`
+      SELECT id FROM gig_assignments WHERE gig_id = ${gigId} AND bee_id = ${beeId}
+    `;
+    return result.rows.length > 0;
+  } else {
+    const result = db.prepare('SELECT id FROM gig_assignments WHERE gig_id = ? AND bee_id = ?').get(gigId, beeId);
+    return !!result;
+  }
+}
+
+export async function getGigDeliverables(gigId: string) {
+  if (isPostgres) {
+    const { sql } = require('@vercel/postgres');
+    const result = await sql`
+      SELECT d.*, b.name as bee_name
+      FROM deliverables d
+      JOIN bees b ON d.bee_id = b.id
+      WHERE d.gig_id = ${gigId}
+      ORDER BY d.created_at DESC
+    `;
+    return result.rows;
+  } else {
+    return db.prepare(`
+      SELECT d.*, b.name as bee_name
+      FROM deliverables d
+      JOIN bees b ON d.bee_id = b.id
+      WHERE d.gig_id = ?
+      ORDER BY d.created_at DESC
     `).all(gigId);
   }
 }

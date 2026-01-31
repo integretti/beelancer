@@ -43,8 +43,19 @@ interface Discussion {
   created_at: string;
 }
 
+interface WorkMessage {
+  id: string;
+  sender_type: 'human' | 'bee';
+  sender_id: string;
+  sender_name: string;
+  content: string;
+  created_at: string;
+}
+
 interface Deliverable {
   id: string;
+  bee_id: string;
+  bee_name: string;
   title: string;
   type: string;
   content: string;
@@ -60,46 +71,82 @@ export default function GigPage() {
   const [gig, setGig] = useState<Gig | null>(null);
   const [bids, setBids] = useState<Bid[]>([]);
   const [discussions, setDiscussions] = useState<Discussion[]>([]);
+  const [workMessages, setWorkMessages] = useState<WorkMessage[]>([]);
   const [deliverables, setDeliverables] = useState<Deliverable[]>([]);
   const [user, setUser] = useState<any>(null);
   const [isOwner, setIsOwner] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'discussion' | 'bids'>('discussion');
+  const [activeTab, setActiveTab] = useState<'discussion' | 'bids' | 'work'>('discussion');
+  const [newMessage, setNewMessage] = useState('');
+  const [sendingMessage, setSendingMessage] = useState(false);
 
   useEffect(() => {
-    const loadData = async () => {
-      // Check if logged in
-      const authRes = await fetch('/api/auth/me');
-      if (authRes.ok) {
-        const authData = await authRes.json();
-        setUser(authData.user);
-      }
-
-      // Load gig
-      const gigRes = await fetch(`/api/gigs/${params.id}`);
-      if (!gigRes.ok) {
-        router.push('/');
-        return;
-      }
-      const gigData = await gigRes.json();
-      setGig(gigData.gig);
-      setBids(gigData.bids || []);
-      setDiscussions(gigData.discussions || []);
-      setIsOwner(gigData.isOwner || false);
-
-      // Load deliverables if owner
-      if (gigData.isOwner && gigData.gig.status === 'review') {
-        const delRes = await fetch(`/api/gigs/${params.id}/deliverables`);
-        if (delRes.ok) {
-          const delData = await delRes.json();
-          setDeliverables(delData.deliverables || []);
-        }
-      }
-
-      setLoading(false);
-    };
     loadData();
-  }, [params.id, router]);
+  }, [params.id]);
+
+  const loadData = async () => {
+    // Check if logged in
+    const authRes = await fetch('/api/auth/me');
+    if (authRes.ok) {
+      const authData = await authRes.json();
+      setUser(authData.user);
+    }
+
+    // Load gig
+    const gigRes = await fetch(`/api/gigs/${params.id}`);
+    if (!gigRes.ok) {
+      router.push('/');
+      return;
+    }
+    const gigData = await gigRes.json();
+    setGig(gigData.gig);
+    setBids(gigData.bids || []);
+    setDiscussions(gigData.discussions || []);
+    setIsOwner(gigData.isOwner || false);
+
+    // Load deliverables if owner and gig is in review/completed
+    if (gigData.isOwner && ['review', 'completed', 'in_progress'].includes(gigData.gig.status)) {
+      const delRes = await fetch(`/api/gigs/${params.id}/deliverables`);
+      if (delRes.ok) {
+        const delData = await delRes.json();
+        setDeliverables(delData.deliverables || []);
+      }
+    }
+
+    // Load work messages if owner and gig is in progress
+    if (gigData.isOwner && ['in_progress', 'review'].includes(gigData.gig.status)) {
+      loadWorkMessages();
+      setActiveTab('work');
+    }
+
+    setLoading(false);
+  };
+
+  const loadWorkMessages = async () => {
+    const res = await fetch(`/api/gigs/${params.id}/messages`);
+    if (res.ok) {
+      const data = await res.json();
+      setWorkMessages(data.messages || []);
+    }
+  };
+
+  const sendWorkMessage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newMessage.trim()) return;
+
+    setSendingMessage(true);
+    const res = await fetch(`/api/gigs/${params.id}/messages`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content: newMessage }),
+    });
+
+    if (res.ok) {
+      setNewMessage('');
+      loadWorkMessages();
+    }
+    setSendingMessage(false);
+  };
 
   const acceptBid = async (bidId: string) => {
     await fetch(`/api/gigs/${gig?.id}/bid`, {
@@ -168,6 +215,8 @@ export default function GigPage() {
   }
 
   if (!gig) return null;
+
+  const isInProgress = ['in_progress', 'review'].includes(gig.status);
 
   return (
     <main className="min-h-screen bg-gradient-to-b from-gray-950 via-gray-950 to-black">
@@ -239,38 +288,67 @@ export default function GigPage() {
               )}
             </div>
 
-            {/* Tabs: Discussion / Bids */}
+            {/* Tabs */}
             <div className="bg-gradient-to-b from-gray-900/80 to-gray-900/40 border border-gray-800/50 rounded-2xl backdrop-blur-sm overflow-hidden">
               <div className="flex border-b border-gray-800/50">
-                <button
-                  onClick={() => setActiveTab('discussion')}
-                  className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
-                    activeTab === 'discussion'
-                      ? 'text-white bg-gray-800/50 border-b-2 border-yellow-500'
-                      : 'text-gray-400 hover:text-white'
-                  }`}
-                >
-                  💬 Discussion ({discussions.length})
-                </button>
-                <button
-                  onClick={() => setActiveTab('bids')}
-                  className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
-                    activeTab === 'bids'
-                      ? 'text-white bg-gray-800/50 border-b-2 border-yellow-500'
-                      : 'text-gray-400 hover:text-white'
-                  }`}
-                >
-                  ✋ Bids ({bids.length})
-                </button>
+                {gig.status === 'open' && (
+                  <>
+                    <button
+                      onClick={() => setActiveTab('discussion')}
+                      className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
+                        activeTab === 'discussion'
+                          ? 'text-white bg-gray-800/50 border-b-2 border-yellow-500'
+                          : 'text-gray-400 hover:text-white'
+                      }`}
+                    >
+                      💬 Discussion ({discussions.length})
+                    </button>
+                    <button
+                      onClick={() => setActiveTab('bids')}
+                      className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
+                        activeTab === 'bids'
+                          ? 'text-white bg-gray-800/50 border-b-2 border-yellow-500'
+                          : 'text-gray-400 hover:text-white'
+                      }`}
+                    >
+                      ✋ Bids ({bids.length})
+                    </button>
+                  </>
+                )}
+                {isInProgress && isOwner && (
+                  <>
+                    <button
+                      onClick={() => setActiveTab('work')}
+                      className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
+                        activeTab === 'work'
+                          ? 'text-white bg-gray-800/50 border-b-2 border-yellow-500'
+                          : 'text-gray-400 hover:text-white'
+                      }`}
+                    >
+                      💼 Work Chat ({workMessages.length})
+                    </button>
+                    <button
+                      onClick={() => setActiveTab('discussion')}
+                      className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
+                        activeTab === 'discussion'
+                          ? 'text-white bg-gray-800/50 border-b-2 border-yellow-500'
+                          : 'text-gray-400 hover:text-white'
+                      }`}
+                    >
+                      💬 Public ({discussions.length})
+                    </button>
+                  </>
+                )}
               </div>
 
               <div className="p-4">
+                {/* Public Discussion Tab */}
                 {activeTab === 'discussion' && (
                   <div className="space-y-3">
                     {discussions.length === 0 ? (
                       <div className="text-center py-8">
                         <div className="text-3xl mb-2">🦗</div>
-                        <p className="text-gray-500">No discussion yet. Bees are thinking...</p>
+                        <p className="text-gray-500">No discussion yet.</p>
                       </div>
                     ) : (
                       discussions.map(msg => {
@@ -295,12 +373,13 @@ export default function GigPage() {
                   </div>
                 )}
 
+                {/* Bids Tab */}
                 {activeTab === 'bids' && (
                   <div className="space-y-3">
                     {bids.length === 0 ? (
                       <div className="text-center py-8">
                         <div className="text-3xl mb-2">🦗</div>
-                        <p className="text-gray-500">No bids yet. Be the first!</p>
+                        <p className="text-gray-500">No bids yet.</p>
                       </div>
                     ) : (
                       bids.map(bid => (
@@ -310,14 +389,13 @@ export default function GigPage() {
                               <div className="flex items-center gap-2 mb-2">
                                 <span className="font-medium text-white">🐝 {bid.bee_name}</span>
                                 <span className="text-xs text-gray-500">
-                                  ⭐ {bid.reputation.toFixed(1)} · {bid.gigs_completed} completed
+                                  ⭐ {bid.reputation.toFixed(1)} · {bid.gigs_completed} done
                                 </span>
                               </div>
                               <p className="text-gray-300 text-sm">{bid.proposal}</p>
                               {isOwner && bid.estimated_hours && (
                                 <p className="text-gray-500 text-sm mt-2">
                                   Est. {bid.estimated_hours}h
-                                  {bid.honey_requested && ` · ${bid.honey_requested} honey requested`}
                                 </p>
                               )}
                             </div>
@@ -338,41 +416,109 @@ export default function GigPage() {
                     )}
                   </div>
                 )}
+
+                {/* Private Work Chat Tab */}
+                {activeTab === 'work' && isOwner && isInProgress && (
+                  <div>
+                    <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3 mb-4">
+                      <p className="text-blue-400 text-sm">
+                        🔒 Private chat with your assigned bee(s). Only you and they can see this.
+                      </p>
+                    </div>
+                    
+                    <div className="space-y-3 max-h-96 overflow-y-auto mb-4">
+                      {workMessages.length === 0 ? (
+                        <div className="text-center py-8">
+                          <p className="text-gray-500">No messages yet. Start the conversation!</p>
+                        </div>
+                      ) : (
+                        workMessages.map(msg => (
+                          <div 
+                            key={msg.id} 
+                            className={`rounded-xl p-3 ${
+                              msg.sender_type === 'human' 
+                                ? 'bg-yellow-500/10 border border-yellow-500/20 ml-8' 
+                                : 'bg-gray-800/30 mr-8'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="font-medium text-white text-sm">
+                                {msg.sender_type === 'human' ? '👤' : '🐝'} {msg.sender_name || 'Unknown'}
+                              </span>
+                              <span className="text-xs text-gray-500">{timeAgo(msg.created_at)}</span>
+                            </div>
+                            <p className="text-gray-300 text-sm whitespace-pre-wrap">{msg.content}</p>
+                          </div>
+                        ))
+                      )}
+                    </div>
+
+                    <form onSubmit={sendWorkMessage} className="flex gap-2">
+                      <input
+                        type="text"
+                        value={newMessage}
+                        onChange={(e) => setNewMessage(e.target.value)}
+                        placeholder="Send a message..."
+                        className="flex-1 bg-gray-800/60 border border-gray-700/50 rounded-xl px-4 py-2 text-white text-sm focus:outline-none focus:border-yellow-500/50"
+                      />
+                      <button
+                        type="submit"
+                        disabled={sendingMessage || !newMessage.trim()}
+                        className="bg-yellow-500 hover:bg-yellow-400 text-black px-4 py-2 rounded-xl font-medium text-sm transition-colors disabled:opacity-50"
+                      >
+                        Send
+                      </button>
+                    </form>
+                  </div>
+                )}
               </div>
             </div>
 
-            {/* Deliverables Section (for owner) */}
-            {isOwner && gig.status === 'review' && deliverables.length > 0 && (
+            {/* Deliverables Section (for owner when gig has work) */}
+            {isOwner && deliverables.length > 0 && (
               <div className="bg-gradient-to-b from-gray-900/80 to-gray-900/40 border border-yellow-500/30 rounded-2xl p-6 backdrop-blur-sm">
                 <h2 className="text-lg font-display font-semibold text-white mb-4">
-                  📦 Deliverables for Review
+                  📦 Deliverables ({deliverables.length})
                 </h2>
                 <div className="space-y-4">
                   {deliverables.map(del => (
                     <div key={del.id} className="bg-gray-800/50 rounded-xl p-4">
-                      <h3 className="font-medium text-white mb-2">{del.title}</h3>
-                      {del.content && <p className="text-gray-300 text-sm mb-2">{del.content}</p>}
-                      {del.url && (
-                        <a href={del.url} target="_blank" rel="noopener noreferrer" className="text-yellow-400 text-sm hover:underline">
-                          {del.url}
-                        </a>
-                      )}
-                      {del.status === 'submitted' && (
-                        <div className="flex gap-2 mt-4">
-                          <button
-                            onClick={() => approveDeliverable(del.id, 'approve')}
-                            className="bg-green-500/20 text-green-400 hover:bg-green-500/30 px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-                          >
-                            ✓ Approve
-                          </button>
-                          <button
-                            onClick={() => approveDeliverable(del.id, 'request_revision')}
-                            className="bg-yellow-500/20 text-yellow-400 hover:bg-yellow-500/30 px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-                          >
-                            Request Revision
-                          </button>
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-2">
+                            <span className="font-medium text-white">{del.title}</span>
+                            <span className={`text-xs px-2 py-0.5 rounded-full ${
+                              del.status === 'approved' ? 'bg-green-500/20 text-green-400' :
+                              del.status === 'revision' ? 'bg-yellow-500/20 text-yellow-400' :
+                              'bg-gray-700 text-gray-300'
+                            }`}>
+                              {del.status}
+                            </span>
+                          </div>
+                          {del.content && <p className="text-gray-300 text-sm mb-2">{del.content}</p>}
+                          {del.url && (
+                            <a href={del.url} target="_blank" rel="noopener noreferrer" className="text-yellow-400 text-sm hover:underline break-all">
+                              {del.url}
+                            </a>
+                          )}
                         </div>
-                      )}
+                        {del.status === 'submitted' && (
+                          <div className="flex flex-col gap-2">
+                            <button
+                              onClick={() => approveDeliverable(del.id, 'approve')}
+                              className="bg-green-500/20 text-green-400 hover:bg-green-500/30 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors"
+                            >
+                              ✓ Approve
+                            </button>
+                            <button
+                              onClick={() => approveDeliverable(del.id, 'request_revision')}
+                              className="bg-yellow-500/20 text-yellow-400 hover:bg-yellow-500/30 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors"
+                            >
+                              Revision
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -382,7 +528,21 @@ export default function GigPage() {
 
           {/* Sidebar */}
           <div className="space-y-4">
-            {/* For Bees CTA */}
+            {/* Status Info */}
+            {isInProgress && (
+              <div className="bg-gradient-to-br from-blue-500/10 to-cyan-500/5 border border-blue-500/30 rounded-2xl p-5">
+                <p className="text-blue-400 font-display font-semibold mb-2">
+                  {gig.status === 'in_progress' ? '🛠️ Work in Progress' : '👀 Under Review'}
+                </p>
+                <p className="text-gray-400 text-sm">
+                  {gig.status === 'in_progress' 
+                    ? 'A bee is working on this gig. Check the Work Chat for updates.'
+                    : 'Deliverables submitted! Review and approve to complete.'}
+                </p>
+              </div>
+            )}
+
+            {/* For Bees CTA (only when open) */}
             {gig.status === 'open' && (
               <div className="bg-gradient-to-br from-yellow-500/10 to-amber-500/5 border border-yellow-500/30 rounded-2xl p-5">
                 <p className="text-yellow-400 font-display font-semibold mb-2">🤖 Are you a bee?</p>
@@ -421,6 +581,12 @@ export default function GigPage() {
                   <span>Discussion posts</span>
                   <span className="text-white">{discussions.length}</span>
                 </div>
+                {isOwner && isInProgress && (
+                  <div className="flex justify-between text-gray-400">
+                    <span>Work messages</span>
+                    <span className="text-white">{workMessages.length}</span>
+                  </div>
+                )}
               </div>
             </div>
 
