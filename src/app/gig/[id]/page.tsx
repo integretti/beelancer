@@ -50,6 +50,7 @@ interface WorkMessage {
   sender_id: string;
   sender_name: string;
   content: string;
+  attachment_url?: string;
   created_at: string;
 }
 
@@ -80,6 +81,9 @@ export default function GigPage() {
   const [activeTab, setActiveTab] = useState<'discussion' | 'bids' | 'work'>('discussion');
   const [newMessage, setNewMessage] = useState('');
   const [sendingMessage, setSendingMessage] = useState(false);
+  const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
+  const [attachmentPreview, setAttachmentPreview] = useState<string | null>(null);
+  const [uploadingFile, setUploadingFile] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -131,19 +135,77 @@ export default function GigPage() {
     }
   };
 
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      // Validate file type
+      const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+      if (!allowedTypes.includes(file.type)) {
+        alert('Only images are allowed (JPEG, PNG, GIF, WebP)');
+        return;
+      }
+      // Validate file size (1MB)
+      if (file.size > 1024 * 1024) {
+        alert('File too large. Maximum size is 1MB');
+        return;
+      }
+      setAttachmentFile(file);
+      setAttachmentPreview(URL.createObjectURL(file));
+    }
+  };
+
+  const clearAttachment = () => {
+    setAttachmentFile(null);
+    if (attachmentPreview) {
+      URL.revokeObjectURL(attachmentPreview);
+      setAttachmentPreview(null);
+    }
+  };
+
   const sendWorkMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newMessage.trim()) return;
+    if (!newMessage.trim() && !attachmentFile) return;
 
     setSendingMessage(true);
+    let attachmentUrl: string | undefined;
+
+    // Upload file first if present
+    if (attachmentFile) {
+      setUploadingFile(true);
+      const formData = new FormData();
+      formData.append('file', attachmentFile);
+      formData.append('gig_id', params.id as string);
+
+      const uploadRes = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (uploadRes.ok) {
+        const uploadData = await uploadRes.json();
+        attachmentUrl = uploadData.url;
+      } else {
+        const err = await uploadRes.json();
+        alert(err.error || 'Failed to upload file');
+        setSendingMessage(false);
+        setUploadingFile(false);
+        return;
+      }
+      setUploadingFile(false);
+    }
+
     const res = await fetch(`/api/gigs/${params.id}/messages`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content: newMessage }),
+      body: JSON.stringify({ 
+        content: newMessage,
+        attachment_url: attachmentUrl,
+      }),
     });
 
     if (res.ok) {
       setNewMessage('');
+      clearAttachment();
       loadWorkMessages();
     }
     setSendingMessage(false);
@@ -446,11 +508,38 @@ export default function GigPage() {
                               </span>
                               <span className="text-xs text-gray-500">{timeAgo(msg.created_at)}</span>
                             </div>
-                            <p className="text-gray-300 text-sm whitespace-pre-wrap">{msg.content}</p>
+                            {msg.content && <p className="text-gray-300 text-sm whitespace-pre-wrap">{msg.content}</p>}
+                            {msg.attachment_url && (
+                              <a href={msg.attachment_url} target="_blank" rel="noopener noreferrer" className="block mt-2">
+                                <img 
+                                  src={msg.attachment_url} 
+                                  alt="Attachment" 
+                                  className="max-h-48 rounded-lg border border-gray-700 hover:border-yellow-500/50 transition-colors"
+                                />
+                              </a>
+                            )}
                           </div>
                         ))
                       )}
                     </div>
+
+                    {/* Attachment Preview */}
+                    {attachmentPreview && (
+                      <div className="mb-3 relative inline-block">
+                        <img 
+                          src={attachmentPreview} 
+                          alt="Attachment preview" 
+                          className="max-h-32 rounded-lg border border-gray-700"
+                        />
+                        <button
+                          type="button"
+                          onClick={clearAttachment}
+                          className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm hover:bg-red-400"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    )}
 
                     <form onSubmit={sendWorkMessage} className="flex gap-2">
                       <input
@@ -460,12 +549,21 @@ export default function GigPage() {
                         placeholder="Send a message..."
                         className="flex-1 bg-gray-800/60 border border-gray-700/50 rounded-xl px-4 py-2 text-white text-sm focus:outline-none focus:border-yellow-500/50"
                       />
+                      <label className="cursor-pointer bg-gray-700 hover:bg-gray-600 text-gray-300 px-3 py-2 rounded-xl transition-colors flex items-center">
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={handleFileSelect}
+                          className="hidden"
+                        />
+                        📎
+                      </label>
                       <button
                         type="submit"
-                        disabled={sendingMessage || !newMessage.trim()}
+                        disabled={sendingMessage || (!newMessage.trim() && !attachmentFile)}
                         className="bg-yellow-500 hover:bg-yellow-400 text-black px-4 py-2 rounded-xl font-medium text-sm transition-colors disabled:opacity-50"
                       >
-                        Send
+                        {uploadingFile ? '📤...' : 'Send'}
                       </button>
                     </form>
                   </div>
